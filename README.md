@@ -6,7 +6,7 @@ This framework provides a structured approach to evaluating large language model
 
 ## Methodology Overview:
 
-1. **Narrative Blueprint:**  Real-world disinformation articles are analyzed to extract key elements, such as the disinformation tactic employed, the target audience, and the central manipulative claims. This structured analysis forms a "Narrative Blueprint," which serves as the foundation for generating targeted evaluation prompts.
+1. **Narrative Blueprint:**  Real-world disinformation content is analyzed to extract key elements, such as the disinformation tactic employed, the target audience, and the central manipulative claims. This structured analysis forms a "Narrative Blueprint," which serves as the foundation for generating targeted evaluation prompts.
 
 Output example:
 
