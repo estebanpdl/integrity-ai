@@ -34,7 +34,7 @@ class OpenAIGPT(LanguageModel):
     MAX_CONCURRENT_REQUESTS = 10
 
     # jitter min value
-    JITTER_VALUE = 0.25
+    DEFAULT_JITTER = 0.25
 
     def __init__(self, model_name: str):
         '''
@@ -150,16 +150,15 @@ class OpenAIGPT(LanguageModel):
                     self.token_usage_log.append((now, estimated_tokens))
 
                     # add jitter to avoid thread pileup
-                    jitter = self.JITTER_VALUE + random.uniform(0, 0.05)
+                    jitter = self.DEFAULT_JITTER + random.uniform(0, 0.05)
                     time.sleep(jitter)
 
             # enforced rate-limit sleep - when over RPM/TPM
             jittered_wait = wait_time + random.uniform(0.05, 0.25)
             time.sleep(jittered_wait)
     
-    def _response_with_backoff_threadsafe(self, prompt: str,
-                                          max_retries: int = 5,
-                                          semaphore: threading.Semaphore = None) -> str:
+    def _call_with_backoff(self, prompt: str, max_retries: int = 5,
+                           semaphore: threading.Semaphore = None) -> str:
         '''
         Generate content with backoff strategy for rate limiting.
 
