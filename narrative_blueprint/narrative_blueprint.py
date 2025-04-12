@@ -49,18 +49,6 @@ class NarrativeBlueprint:
     
     '''
     
-    def _wait_for_slot(self):
-        '''
-        Wait for a slot to be available for processing requests.
-        '''
-        with self.rate_limit_lock:
-            now = time.time()
-            elapsed = now - self.last_request_time[0]
-            if elapsed < self.request_interval:
-                time.sleep(self.request_interval - elapsed)
-            
-            self.last_request_time[0] = time.time()
-    
     def _chat_with_backoff_threadsafe(self, prompt, max_retries=5):
         '''
         Chat with the LLM engine, implementing a backoff strategy for rate
