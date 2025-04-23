@@ -10,39 +10,35 @@ from openai import RateLimitError
 # MongoDB connection
 from databases import MongoDBManager
 
-def wait_for_slot():
-    '''
-    '''
-    pass
+# Narrative blueprint
+from narrative_blueprint import NarrativeBlueprint
 
-def chat_with_backoff_threadsafe(prompt, max_retries=5):
-    '''
-    '''
-    retry_count = 0
-    while retry_count <= max_retries:
-        try:
-            wait_for_slot()
-            response = prompt
-            return response
-        except RateLimitError:
-            retry_count += 1
-            sleep_time = (2 ** retry_count) + random.uniform(0, 1)
-            print ('Rate limit hit. Retrying in {sleep_time} seconds...')
-            time.sleep(sleep_time)
-    
-    return 0
+# OpenAI class
+from models import OpenAIGPT
 
-# MongoDBManager class
-mongodb_manager = MongoDBManager()
-collection = mongodb_manager.create_connection(
-    'narrative-blueprint',
-    'gpt-4o-mini'
+# # MongoDBManager class
+# mongodb_manager = MongoDBManager()
+# collection = mongodb_manager.get_collection(
+#     'narrative-blueprint',
+#     'gpt-4o-mini'
+# )
+
+
+# sample_document = { "uuid": "f0aabce3-5e06-4754-a66a-a4a9c69b75bb", "type": "sample" }
+
+# # insert sample document
+# collection.insert_one(sample_document)
+
+# uuids = mongodb_manager.get_collected_uuids(
+#     'narrative-blueprint',
+#     'gpt-4o-mini'
+# )
+
+openai_llm = OpenAIGPT(model_name='gpt-4o-mini')
+blueprint = NarrativeBlueprint(
+    llm_engine=openai_llm,
+    args={'narrative_path': '../llm-evaluations/data/eval_narratives.csv'}
 )
 
-sample_document = { "uuid": "f0aabce3-5e06-4754-a66a-a4a9c69b75bb", "type": "sample" }
-collection.insert_one(sample_document)
-
-uuids = mongodb_manager.get_collected_uuids(
-    'narrative-blueprint',
-    'gpt-4o-mini'
-)
+response = blueprint.run_blueprint_analysis()
+print (response)

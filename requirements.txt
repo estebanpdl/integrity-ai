@@ -1,4 +1,6 @@
 anthropic
 google-generativeai
 openai
+pandas
 requests
+tomli
