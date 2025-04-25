@@ -155,6 +155,31 @@ class OpenAIGPT(LanguageModel):
         with open(self.log_file, 'a') as f:
             f.write(message + '\n')
     
+    def _update_tqdm_description(self, pbar: tqdm, message: str) -> None:
+        '''
+        Update the tqdm progress bar description safely.
+
+        :param pbar: The tqdm progress bar instance.
+        :type pbar: tqdm
+
+        :param message: The message to be displayed in the progress bar.
+        :type message: str
+
+        :return: None
+        '''
+        with self.tqdm_lock:
+            pbar.set_description(message)
+    
+    def _update_tqdm_postfix(self, pbar: tqdm, data: dict) -> None:
+        '''
+        Update the tqdm progress bar postfix (metrics) safely.
+
+        :param pbar: The tqdm progress bar instance.
+        :param data: A dictionary of metric names and values.
+        '''
+        with self.tqdm_lock:
+            pbar.set_postfix(data)
+
     def _signal_handler(self, sig, frame) -> None:
         '''
         Signal handler for Ctrl+C.
@@ -170,8 +195,7 @@ class OpenAIGPT(LanguageModel):
         self.stop_flag.set()
     
     def _enforce_rate_limits(self, estimated_tokens: int,
-                             pbar: tqdm = None,
-                             tqdm_lock: threading.Lock = None) -> None:
+                             pbar: tqdm = None) -> None:
         '''
         Enforce rate limits for the OpenAI API.
         This method ensures that the number of requests and tokens used
@@ -182,9 +206,6 @@ class OpenAIGPT(LanguageModel):
 
         :param pbar: The tqdm progress bar.
         :type pbar: tqdm
-
-        :param tqdm_lock: The threading lock for the tqdm progress bar.
-        :type tqdm_lock: threading.Lock
 
         :return: None
         '''
@@ -213,8 +234,7 @@ class OpenAIGPT(LanguageModel):
                 tokens_used = sum(p + c for _, p, c in self.token_usage_log)
 
                 # update progress bar
-                with tqdm_lock:
-                    pbar.set_postfix({"Tokens used/60s": tokens_used})
+                self._update_tqdm_postfix(pbar, {'Tokens used/60s': tokens_used})
 
                 # response buffer
                 response_buffer = self._get_average_completion_tokens()
@@ -239,24 +259,31 @@ class OpenAIGPT(LanguageModel):
 
             # wait_time != 0 - enforced rate-limit sleep - when over RPM/TPM
             jittered_wait = wait_time + random.uniform(0.05, 0.25)
-            with tqdm_lock:
-                pbar.set_description(f"[WAITING] Sleeping {jittered_wait:.2f}s (RPM/TPM limit)")
+            self._update_tqdm_description(
+                pbar,
+                f'[WAITING] Sleeping {jittered_wait:.2f}s (RPM/TPM limit)'
+            )
 
             self.stop_flag.wait(jittered_wait)
     
-    def _process_response(self, response: openai.ChatCompletion,
+    def _process_response(self,
+                          uuid: str,
+                          response: openai.ChatCompletion,
                           mongo_db_name: str = None,
                           mongo_collection_name: str = None) -> None:
         '''
         Process API response.
 
+        :param uuid: The uuid of the narrative that has been processed.
+        :type uuid: str
+
         :param response: The response from the OpenAI API.
         :type response: openai.ChatCompletion
 
-        :param mongo_db_name: The MongoDB database name.
+        :param mongo_db_name: Name of the MongoDB database.
         :type mongo_db_name: str
 
-        :param mongo_collection_name: The MongoDB collection name.
+        :param mongo_collection_name: Name of the MongoDB collection.
         :type mongo_collection_name: str
 
         :return: None
@@ -277,34 +304,41 @@ class OpenAIGPT(LanguageModel):
         # get response
         response_content = response.choices[0].message.content
 
+        # parse response
+        response_content = ast.literal_eval(response_content)
+
+        # add uuid to response
+        response_content['uuid'] = uuid
+
         # get collection
         collection = self.mongodb_manager.get_collection(
             db_name=mongo_db_name,
             collection_name=mongo_collection_name   
         )
 
-        # parse response
-        response_content = ast.literal_eval(response_content)
-
         # upload response to database
         collection.insert_one(
             response_content
         )
     
-    def _call_with_backoff(self, message: list[dict], request_id: int,
+    def _call_with_backoff(self, request_id: int,
+                           uuid: str,
+                           message: list[dict],
                            mongo_db_name: str = None,
                            mongo_collection_name: str = None,
                            pbar: tqdm = None,
-                           tqdm_lock: threading.Lock = None,
                            max_retries: int = 5) -> None:
         '''
         Call the OpenAI API with a backoff strategy.
 
-        :param message: The message prompt to be processed.
-        :type message: list[dict]
-
         :param request_id: The request ID.
         :type request_id: int
+
+        :param uuid: The uuid of the narrative that is being processed.
+        :type uuid: str
+
+        :param message: The message prompt to be processed.
+        :type message: list[dict]
 
         :param mongo_db_name: Name of the MongoDB database.
         :type mongo_db_name: str
@@ -314,9 +348,6 @@ class OpenAIGPT(LanguageModel):
 
         :param pbar: The tqdm progress bar.
         :type pbar: tqdm
-
-        :param tqdm_lock: The threading lock for the tqdm progress bar.
-        :type tqdm_lock: threading.Lock
 
         :param max_retries: The maximum number of retries.
         :type max_retries: int
@@ -336,14 +367,15 @@ class OpenAIGPT(LanguageModel):
                     estimated_tokens = self._estimate_tokens(prompt)
 
                     # update progress bar
-                    with tqdm_lock:
-                        pbar.set_description(f"[RUNNING] prompt #{request_id} in thread")
+                    self._update_tqdm_description(
+                        pbar,
+                        f'[RUNNING] prompt #{request_id} in thread'
+                    )
                     
                     # enforce rate limits
                     self._enforce_rate_limits(
                         estimated_tokens,
-                        pbar,
-                        tqdm_lock
+                        pbar
                     )
 
                     # # make request
@@ -352,7 +384,7 @@ class OpenAIGPT(LanguageModel):
                     #     messages=message
                     # )
 
-                    # self._process_response(response, mongo_db_name, mongo_collection_name)
+                    # self._process_response(uuid, response, mongo_db_name, mongo_collection_name)
 
                     # update token usage log
                     self.token_usage_log.append(
@@ -366,42 +398,53 @@ class OpenAIGPT(LanguageModel):
                     
                 except RateLimitError:
                     # update progress bar
-                    with tqdm_lock:
-                        pbar.set_description(f"[RETRY {retry_count}] prompt #{request_id} sleeping")
+                    self._update_tqdm_description(
+                        pbar,
+                        f'[RETRY {retry_count}] prompt #{request_id} sleeping'
+                    )
                     
-                    # increment retry count
+                    # increment retry count and calculate sleep time
                     retry_count += 1
-
-                    # calculate sleep time
-                    sleep_time = (2 ** retry_count) + random.uniform(0, self.DEFAULT_JITTER)
-
-                    # sleep
+                    random_jitter = random.uniform(0, self.DEFAULT_JITTER)
+                    sleep_time = (2 ** retry_count) + random_jitter
                     self.stop_flag.wait(sleep_time)
                 
                 except Exception as e:
                     # handle unexpected errors
-                    with tqdm_lock:
-                        pbar.set_description(f"[ERROR] prompt #{request_id} error")
+                    self._update_tqdm_description(
+                        pbar,
+                        f'[ERROR] prompt #{request_id} error'
+                    )
                     
                     # write to log file
-                    self._log_write(f"[ERROR] prompt #{request_id} error: {e.__class__.__name__}")
+                    e_name = e.__class__.__name__
+                    self._log_write(
+                        f'[ERROR] prompt #{request_id} error: {e_name}'
+                    )
 
                     return
         
         # exceeded max retries
         if retry_count > max_retries:
-            with tqdm_lock:
-                pbar.set_description(f"[FAILED] prompt #{request_id} exceeded retries")
+            self._update_tqdm_description(
+                pbar,
+                f'[FAILED] prompt #{request_id} exceeded retries'
+            )
             
             # write to log file
             self._log_write(f"[FAILED] prompt #{request_id} exceeded retries")
             return
 
-    def run_parallel_prompt_tasks(self, messages: list,
+    def run_parallel_prompt_tasks(self,
+                                  uuids: list = None,
+                                  messages: list = None,
                                   mongo_db_name: str = None,
                                   mongo_collection_name: str = None) -> None:
         '''
         Run parallel prompt tasks with thread pooling and rate-limiting.
+
+        :param uuids: List of uuids to process.
+        :type uuids: list
 
         :param messages: List of message prompts to process.
         :type messages: list
@@ -423,14 +466,14 @@ class OpenAIGPT(LanguageModel):
                 futures = {
                     executor.submit(
                         self._call_with_backoff,
-                        message,
                         i,
+                        uuid,
+                        message,
                         mongo_db_name,
                         mongo_collection_name,
-                        pbar,
-                        self.tqdm_lock
+                        pbar
                     ): i
-                    for i, message in enumerate(messages)
+                    for i, (uuid, message) in enumerate(zip(uuids, messages))
                 }
                 while futures:
                     done, _ = wait(futures.keys(), timeout=0.2)
@@ -442,29 +485,15 @@ class OpenAIGPT(LanguageModel):
                             pass
                         pbar.update(1)
     
-    def _test_messages(self, message: str, request_id: int) -> int:
-        '''
-        Test the messages.
-
-        :param message: The message to be tested.
-        :type message: list
-
-        :param request_id: The request ID.
-        :type request_id: int
-
-        :return: The estimated tokens.
-        :rtype: int
-        '''
-        system_prompt = message[0]['content']
-        user_prompt = message[1]['content']
-
-        prompt = f'{system_prompt}\n{user_prompt}'
-        estimated_tokens = self._estimate_tokens(prompt)
-
-        return estimated_tokens
-    
     def test_prompts(self, message: list) -> str:
         '''
+        Test the prompts.
+
+        :param message: The message prompt to be processed.
+        :type message: list
+
+        :return: The response from the OpenAI API.
+        :rtype: openai.ChatCompletion
         '''
         response = self.client.chat.completions.create(
             model=self.model_name,

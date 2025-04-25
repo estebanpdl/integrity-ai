@@ -67,6 +67,8 @@ class NarrativeBlueprint:
 
         # MongoDB manager
         self.mongodb_manager = MongoDBManager()
+        self.mongo_db_name = self.args.get('mongo_db_name')
+        self.mongo_collection_name = self.args.get('mongo_collection_name')
 
         # load narratives
         narrative_path = self.args.get('narrative_path')
@@ -140,6 +142,15 @@ class NarrativeBlueprint:
         except Exception as e:
             raise e
     
+    def _load_uuids_from_collection(self) -> list:
+        '''
+        Load the uuids from a MongoDB collection.
+        '''
+        return self.mongodb_manager.get_collected_uuids(
+            self.mongo_db_name,
+            self.mongo_collection_name
+        )
+    
     def _compose_blueprint_messages(self) -> list:
         '''
         Prepare the messages for the LLM.
@@ -153,6 +164,10 @@ class NarrativeBlueprint:
         lang = self.args.get('language', 'en')
         system_prompt = self._load_system_prompt(language=lang)
 
+        # filter narratives by uuids
+        uuids = self._load_uuids_from_collection()
+        self.narratives = self.narratives[~ self.narratives['uuid'].isin(uuids)].copy()
+
         # prepare messages for each narrative
         messages_list = []
         for narrative in self.narratives['narrative']:
@@ -163,32 +178,25 @@ class NarrativeBlueprint:
             ]
             messages_list.append(message)
         
-        return messages_list
+        return self.narratives['uuid'].tolist(), messages_list
     
-    def run_blueprint_analysis(self, mongo_db_name: str = None,
-                               mongo_collection_name: str = None) -> None:
+    def run_blueprint_analysis(self) -> None:
         '''
         Run the blueprint analysis.
-
-        :param mongo_db_name: The MongoDB database name.
-        :type mongo_db_name: str
-
-        :param mongo_collection_name: The MongoDB collection name.
-        :type mongo_collection_name: str
 
         :raises ConnectionFailure: If connection to MongoDB fails.
         '''
         # Test MongoDB access to database and collection before proceeding
         print('Testing MongoDB acccess to database...')
         mongodb_response = self.mongodb_manager.test_access_to_db_and_collection(
-            mongo_db_name,
-            mongo_collection_name
+            self.mongo_db_name,
+            self.mongo_collection_name
         )
         if not mongodb_response:
             print ('MongoDB access to database or collection failed')
             print ('')
 
-            details = f'<<{mongo_db_name}>> and <<{mongo_collection_name}>>'
+            details = f'<<{self.mongo_db_name}>> and <<{self.mongo_collection_name}>>'
             raise ConnectionFailure(
                 f'MongoDB access to database failed for {details}'
             )
@@ -197,14 +205,16 @@ class NarrativeBlueprint:
         print ('')
 
         # compose messages
-        messages_list = self._compose_blueprint_messages()
+        uuids, messages_list = self._compose_blueprint_messages()
 
         # run parallel prompt tasks
         print('Running narrative blueprint analysis...')
+        sample_size = 100
         self.llm_engine.run_parallel_prompt_tasks(
-            messages=messages_list[:200],
-            mongo_db_name=mongo_db_name,
-            mongo_collection_name=mongo_collection_name
+            uuids=uuids[:sample_size],
+            messages=messages_list[:sample_size],
+            mongo_db_name=self.mongo_db_name,
+            mongo_collection_name=self.mongo_collection_name
         )
     
     def test_blueprint_analysis(self):
