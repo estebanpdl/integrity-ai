@@ -22,9 +22,9 @@ class MongoDBManager(Database):
         connection_string = 'mongodb://localhost:27017/'
         self.client = MongoClient(connection_string)
 
-    def test_connection(self, db_name: str, collection_name: str) -> bool:
+    def test_access_to_db_and_collection(self, db_name: str, collection_name: str) -> bool:
         '''
-        Tests the connection to MongoDB and verifies access to the specified database and collection.
+        Tests access to the specified database and collection.
 
         :param db_name: The name of the MongoDB database.
         :type db_name: str
@@ -32,7 +32,7 @@ class MongoDBManager(Database):
         :param collection_name: The name of the MongoDB collection.
         :type collection_name: str
 
-        :return: True if connection is successful, False otherwise
+        :return: True if access is successful, False otherwise
         :rtype: bool
         '''
         db = self.client[db_name]

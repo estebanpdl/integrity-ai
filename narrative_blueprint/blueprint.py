@@ -65,6 +65,9 @@ class NarrativeBlueprint:
         
         self.llm_engine = llm_engine
 
+        # MongoDB manager
+        self.mongodb_manager = MongoDBManager()
+
         # load narratives
         narrative_path = self.args.get('narrative_path')
         if not narrative_path:
@@ -175,24 +178,22 @@ class NarrativeBlueprint:
 
         :raises ConnectionFailure: If connection to MongoDB fails.
         '''
-        # Test MongoDB connection before proceeding
-        print('Testing MongoDB connection...')
-        mongodb_manager = MongoDBManager()
-        
-        mongodb_response = mongodb_manager.test_connection(
+        # Test MongoDB access to database and collection before proceeding
+        print('Testing MongoDB acccess to database...')
+        mongodb_response = self.mongodb_manager.test_access_to_db_and_collection(
             mongo_db_name,
             mongo_collection_name
         )
         if not mongodb_response:
-            print ('MongoDB connection failed')
+            print ('MongoDB access to database or collection failed')
             print ('')
 
             details = f'<<{mongo_db_name}>> and <<{mongo_collection_name}>>'
             raise ConnectionFailure(
-                f'MongoDB connection failed for {details}'
+                f'MongoDB access to database failed for {details}'
             )
         
-        print('MongoDB connection successful')
+        print('MongoDB access to database successful')
         print ('')
 
         # compose messages
