@@ -3,11 +3,12 @@
 # import modules
 import os
 
-# MongoDB dependencies
-from pymongo import MongoClient
-
 # import base class
 from .database import Database
+
+# MongoDB dependencies
+from pymongo import MongoClient
+from pymongo.collection import Collection
 
 # MongoDBManager class
 class MongoDBManager(Database):
@@ -21,12 +22,40 @@ class MongoDBManager(Database):
         connection_string = 'mongodb://localhost:27017/'
         self.client = MongoClient(connection_string)
 
-    def get_collection(self, db_name: str, collection_name: str) -> None:
+    def test_connection(self, db_name: str, collection_name: str) -> bool:
+        '''
+        Tests the connection to MongoDB and verifies access to the specified database and collection.
+
+        :param db_name: The name of the MongoDB database.
+        :type db_name: str
+
+        :param collection_name: The name of the MongoDB collection.
+        :type collection_name: str
+
+        :return: True if connection is successful, False otherwise
+        :rtype: bool
+        '''
+        db = self.client[db_name]
+
+        # list all collections
+        collections = db.list_collection_names()
+        if collection_name in collections:
+            return True
+        else:
+            return False
+
+    def get_collection(self, db_name: str, collection_name: str) -> Collection:
         '''
         Retrieves a collection from the MongoDB database.
 
         :param db_name: The name of the MongoDB database.
+        :type db_name: str
+
         :param collection_name: The name of the MongoDB collection.
+        :type collection_name: str
+
+        :return: The collection object.
+        :rtype: pymongo.collection.Collection
         '''
         db = self.client[db_name]
 

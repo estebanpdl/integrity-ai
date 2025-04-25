@@ -3,28 +3,30 @@
 # import modules
 import os
 import ast
-import json
 import time
 import signal
 import random
+import openai
 import tiktoken
 import threading
+
+# dotenv for environment variables
+from dotenv import load_dotenv
+
+# multithreading
+from concurrent.futures import ThreadPoolExecutor, wait
+
+# tqdm bar
+from tqdm import tqdm
 
 # import base class
 from .model import LanguageModel
 
 # OpenAI related modules
-import openai
 from openai import OpenAI, RateLimitError
-
-# multithreading
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # MongoDB connection
 from databases import MongoDBManager
-
-# dotenv for environment variables
-from dotenv import load_dotenv
 
 # OpenAIGPT class
 class OpenAIGPT(LanguageModel):
@@ -84,12 +86,18 @@ class OpenAIGPT(LanguageModel):
         except Exception as KeyError:
             self.encoding = tiktoken.get_encoding('o200k_base')
 
+        # log file
+        self.log_file = './logs/openai_client.log'
+
         # API limits
         self.request_interval = 60.0 / self.max_requests_per_min
 
         # shared threading locks
         self.rate_limit_lock = threading.Lock()
         self.token_lock = threading.Lock()
+        self.tqdm_lock = threading.Lock()
+
+        # shared threading event
         self.stop_flag = threading.Event()
 
         # share controls for rate limiting
@@ -129,7 +137,41 @@ class OpenAIGPT(LanguageModel):
         # estimate tokens
         return len(self.encoding.encode(prompt))
     
-    def _enforce_rate_limits(self, estimated_tokens: int) -> None:
+    def _log_write(self, message: str) -> None:
+        '''
+        Write a message to the log file.
+
+        :param message: The message to be written to the log file.
+        :type message: str
+
+        :return: None
+        '''
+        # create log directory if it doesn't exist
+        log_dir = os.path.dirname(self.log_file)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+
+        # write to log file
+        with open(self.log_file, 'a') as f:
+            f.write(message + '\n')
+    
+    def _signal_handler(self, sig, frame) -> None:
+        '''
+        Signal handler for Ctrl+C.
+
+        :param sig: The signal number.
+        :type sig: int
+
+        :param frame: The current stack frame.
+        :type frame: frame
+
+        :return: None
+        '''
+        self.stop_flag.set()
+    
+    def _enforce_rate_limits(self, estimated_tokens: int,
+                             pbar: tqdm = None,
+                             tqdm_lock: threading.Lock = None) -> None:
         '''
         Enforce rate limits for the OpenAI API.
         This method ensures that the number of requests and tokens used
@@ -137,6 +179,12 @@ class OpenAIGPT(LanguageModel):
 
         :param estimated_tokens: The estimated tokens in the prompt.
         :type estimated_tokens: int
+
+        :param pbar: The tqdm progress bar.
+        :type pbar: tqdm
+
+        :param tqdm_lock: The threading lock for the tqdm progress bar.
+        :type tqdm_lock: threading.Lock
 
         :return: None
         '''
@@ -164,6 +212,10 @@ class OpenAIGPT(LanguageModel):
                 
                 tokens_used = sum(p + c for _, p, c in self.token_usage_log)
 
+                # update progress bar
+                with tqdm_lock:
+                    pbar.set_postfix({"Tokens used/60s": tokens_used})
+
                 # response buffer
                 response_buffer = self._get_average_completion_tokens()
                 agg_tokens = tokens_used + estimated_tokens + response_buffer
@@ -182,25 +234,30 @@ class OpenAIGPT(LanguageModel):
 
                     # add jitter to avoid thread pileup
                     jitter = self.DEFAULT_JITTER + random.uniform(0, 0.05)
-                    time.sleep(jitter)
+                    self.stop_flag.wait(jitter)
                     break
 
-            # enforced rate-limit sleep - when over RPM/TPM
+            # wait_time != 0 - enforced rate-limit sleep - when over RPM/TPM
             jittered_wait = wait_time + random.uniform(0.05, 0.25)
-            time.sleep(jittered_wait)
+            with tqdm_lock:
+                pbar.set_description(f"[WAITING] Sleeping {jittered_wait:.2f}s (RPM/TPM limit)")
+
+            self.stop_flag.wait(jittered_wait)
     
-    def _signal_handler(self, sig, frame) -> None:
-        '''
-        Signal handler for Ctrl+C.
-        '''
-        self.stop_flag.set()
-    
-    def _process_response(self, response: openai.ChatCompletion) -> None:
+    def _process_response(self, response: openai.ChatCompletion,
+                          mongo_db_name: str = None,
+                          mongo_collection_name: str = None) -> None:
         '''
         Process API response.
 
         :param response: The response from the OpenAI API.
         :type response: openai.ChatCompletion
+
+        :param mongo_db_name: The MongoDB database name.
+        :type mongo_db_name: str
+
+        :param mongo_collection_name: The MongoDB collection name.
+        :type mongo_collection_name: str
 
         :return: None
         '''
@@ -222,8 +279,8 @@ class OpenAIGPT(LanguageModel):
 
         # get collection
         collection = self.mongodb_manager.get_collection(
-            db_name='narrative-blueprint',
-            collection_name='gpt-4o-mini'
+            db_name=mongo_db_name,
+            collection_name=mongo_collection_name   
         )
 
         # parse response
@@ -234,67 +291,156 @@ class OpenAIGPT(LanguageModel):
             response_content
         )
     
-    def _call_with_backoff(self, message: str, request_id: int,
+    def _call_with_backoff(self, message: list[dict], request_id: int,
+                           mongo_db_name: str = None,
+                           mongo_collection_name: str = None,
+                           pbar: tqdm = None,
+                           tqdm_lock: threading.Lock = None,
                            max_retries: int = 5) -> None:
         '''
+        Call the OpenAI API with a backoff strategy.
+
+        :param message: The message prompt to be processed.
+        :type message: list[dict]
+
+        :param request_id: The request ID.
+        :type request_id: int
+
+        :param mongo_db_name: Name of the MongoDB database.
+        :type mongo_db_name: str
+
+        :param mongo_collection_name: Name of the MongoDB collection.
+        :type mongo_collection_name: str
+
+        :param pbar: The tqdm progress bar.
+        :type pbar: tqdm
+
+        :param tqdm_lock: The threading lock for the tqdm progress bar.
+        :type tqdm_lock: threading.Lock
+
+        :param max_retries: The maximum number of retries.
+        :type max_retries: int
+
+        :return: None
         '''
         retry_count = 0
         while not self.stop_flag.is_set() and retry_count <= max_retries:
             with self.semaphore:
                 try:
-                    # estimate tokens
+                    # get prompts
                     system_prompt = message[0]['content']
                     user_prompt = message[1]['content']
 
+                    # estimate tokens
                     prompt = f'{system_prompt}\n{user_prompt}'
                     estimated_tokens = self._estimate_tokens(prompt)
+
+                    # update progress bar
+                    with tqdm_lock:
+                        pbar.set_description(f"[RUNNING] prompt #{request_id} in thread")
                     
                     # enforce rate limits
-                    self._enforce_rate_limits(estimated_tokens)
-
-                    # make request
-                    response = self.client.chat.completions.create(
-                        model=self.model_name,
-                        messages=message
+                    self._enforce_rate_limits(
+                        estimated_tokens,
+                        pbar,
+                        tqdm_lock
                     )
 
-                    self._process_response(response)
-                    return True
+                    # # make request
+                    # response = self.client.chat.completions.create(
+                    #     model=self.model_name,
+                    #     messages=message
+                    # )
+
+                    # self._process_response(response, mongo_db_name, mongo_collection_name)
+
+                    # update token usage log
+                    self.token_usage_log.append(
+                        (
+                            time.time(),
+                            estimated_tokens,
+                            random.randint(400, 500)
+                        )
+                    )
+                    return
                     
                 except RateLimitError:
+                    # update progress bar
+                    with tqdm_lock:
+                        pbar.set_description(f"[RETRY {retry_count}] prompt #{request_id} sleeping")
+                    
+                    # increment retry count
                     retry_count += 1
+
+                    # calculate sleep time
                     sleep_time = (2 ** retry_count) + random.uniform(0, self.DEFAULT_JITTER)
 
                     # sleep
-                    time.sleep(sleep_time)
+                    self.stop_flag.wait(sleep_time)
+                
+                except Exception as e:
+                    # handle unexpected errors
+                    with tqdm_lock:
+                        pbar.set_description(f"[ERROR] prompt #{request_id} error")
+                    
+                    # write to log file
+                    self._log_write(f"[ERROR] prompt #{request_id} error: {e.__class__.__name__}")
 
-    def run_parallel_prompt_tasks(self, messages: list) -> list:
+                    return
+        
+        # exceeded max retries
+        if retry_count > max_retries:
+            with tqdm_lock:
+                pbar.set_description(f"[FAILED] prompt #{request_id} exceeded retries")
+            
+            # write to log file
+            self._log_write(f"[FAILED] prompt #{request_id} exceeded retries")
+            return
+
+    def run_parallel_prompt_tasks(self, messages: list,
+                                  mongo_db_name: str = None,
+                                  mongo_collection_name: str = None) -> None:
         '''
-        Run parallel prompt tasks.
+        Run parallel prompt tasks with thread pooling and rate-limiting.
 
-        :param messages: The list of messages to be processed.
+        :param messages: List of message prompts to process.
         :type messages: list
 
-        :return: The list of results.
+        :param mongo_db_name: Name of the MongoDB database.
+        :type mongo_db_name: str
+
+        :param mongo_collection_name: Name of the MongoDB collection.
+        :type mongo_collection_name: str
+
+        :return: None
         '''
         signal.signal(signal.SIGINT, self._signal_handler)
 
-        results = []
-        with ThreadPoolExecutor(max_workers=30) as executor:
-            futures = {
-                executor.submit(self._call_with_backoff, message, i): i
-                for i, message in enumerate(messages)
-            }
-
-            for future in as_completed(futures):
-                try:
-                    result = future.result()
-                    if result:
-                        results.append(result)
-                except Exception as e:
-                    pass
-        
-        return results
+        # total tasks
+        total_tasks = len(messages)
+        with tqdm(total=total_tasks, desc="Processing requests") as pbar:
+            with ThreadPoolExecutor(max_workers=30) as executor:
+                futures = {
+                    executor.submit(
+                        self._call_with_backoff,
+                        message,
+                        i,
+                        mongo_db_name,
+                        mongo_collection_name,
+                        pbar,
+                        self.tqdm_lock
+                    ): i
+                    for i, message in enumerate(messages)
+                }
+                while futures:
+                    done, _ = wait(futures.keys(), timeout=0.2)
+                    for future in done:
+                        futures.pop(future)
+                        try:
+                            future.result()
+                        except Exception as e:
+                            pass
+                        pbar.update(1)
     
     def _test_messages(self, message: str, request_id: int) -> int:
         '''
@@ -326,214 +472,3 @@ class OpenAIGPT(LanguageModel):
         )
 
         return response
-
-
-
-
-
-
-
-
-
-
-
-
-    # def run_parallel_prompt_tasks(self, messages: list) -> None:
-    #     '''
-    #     Run parallel prompt tasks.
-
-    #     :param messages: The list of messages to be processed.
-    #     '''
-    #     signal.signal(signal.SIGINT, self._signal_handler)
-
-    #     results = []
-    #     with ThreadPoolExecutor(max_workers=30) as executor:
-    #         futures = {
-    #             executor.submit(self._call_with_backoff, message, i): i
-    #             for i, message in enumerate(messages)
-    #         }
-
-    #         for future in as_completed(futures):
-    #             try:
-    #                 result = future.result()
-    #                 if result:
-    #                     results.append(result)
-    #             except Exception as e:
-    #                 print(f"[MAIN] Exception from future: {e}")
-
-    #     print("\n[SUMMARY] All requests completed.")
-    #     print(f"Total results: {len(results)}")
-
-    # def chat_with_backoff(self, message, request_id: int) -> None:
-    #     '''
-    #     '''
-    #     while not self.stop_flag.is_set():
-    #         with self.semaphore:
-    #             try:
-    #                 print(f"[REQUEST NUMBER] {request_id}")
-    #                 estimated_tokens = self._estimate_tokens(message)
-    #                 print(f"[INFO] Estimated tokens: {estimated_tokens}")
-
-    #                 self._enforce_rate_limits(estimated_tokens)
-
-    #                 print(f"[CALL] Proceeding with request at {time.strftime('%X')}")
-    #                 actual_tokens_used = estimated_tokens + random.randint(-10, 10)
-    #                 print(f"[SIMULATION] Tokens used (real): {actual_tokens_used}")
-
-    #                 with self.token_lock:
-    #                     self.token_usage_log.append((time.time(), actual_tokens_used))
-
-    #                 return {"message": "Simulated response", "tokens": actual_tokens_used}
-    #             except Exception as e:
-    #                 print(f"[ERROR] Request {request_id} failed: {e}")
-
-    # def _enforce_rate_limits(self, estimated_tokens: int) -> None:
-    #     '''
-    #     Enforce rate limits for the OpenAI API.
-    #     This method ensures that the number of requests and tokens used
-    #     per minute does not exceed the specified limits.
-
-    #     :param estimated_tokens: The estimated tokens in the prompt.
-    #     '''
-    #     # wait for rate limit slot
-    #     while True:
-    #         wait_time = 0
-    #         with self.rate_limit_lock, self.token_lock:
-    #             now = time.time()
-
-    #             # timestamps and tokens used
-    #             self.request_timestamps[:] = [
-    #                 t for t in self.request_timestamps if now - t < 60.0
-    #             ]
-    #             self.token_usage_log[:] = [
-    #                 (t, n) for t, n in self.token_usage_log if now - t < 60.0
-    #             ]
-
-    #             if len(self.request_timestamps) >= self.max_requests_per_min:
-    #                 if self.request_timestamps:
-    #                     oldest_request_time = self.request_timestamps[0]
-    #                     request_wait = 60.0 - (now - oldest_request_time)
-    #                 else:
-    #                     request_wait = 1.0
-    #                 wait_time = max(wait_time, request_wait)
-                
-    #             tokens_used = sum(n for _, n in self.token_usage_log)
-
-    #             print(f'[REQUESTS TIMESTAMPS]: {len(self.request_timestamps)}')
-    #             print(f'[TOKENS USAGE LOG]: {len(self.token_usage_log)}')
-    #             print(f"[TOKENS USED] {tokens_used}")
-
-    #             # response buffer
-    #             response_buffer = self._get_average_response_tokens()
-    #             agg_tokens = tokens_used + estimated_tokens + response_buffer
-    #             if agg_tokens > self.max_tokens_per_min:
-    #                 if self.token_usage_log:
-    #                     oldest_token_time = self.token_usage_log[0][0]
-    #                     token_wait = 60.0 - (now - oldest_token_time)
-    #                 else:
-    #                     token_wait = 1.0
-    #                 wait_time = max(wait_time, token_wait)
-                
-    #             if wait_time == 0:
-    #                 # no enforced wait time
-    #                 now = time.time()
-    #                 self.request_timestamps.append(now)
-    #                 self.token_usage_log.append((now, estimated_tokens))
-
-    #                 # add jitter to avoid thread pileup
-    #                 jitter = self.DEFAULT_JITTER + random.uniform(0, 0.05)
-    #                 print(f"[JITTERED WAIT] Sleeping {jitter:.2f}s to avoid thread clustering")
-    #                 time.sleep(jitter)
-    #                 break
-
-    #         # enforced rate-limit sleep - when over RPM/TPM
-    #         jittered_wait = wait_time + random.uniform(0.05, 0.25)
-    #         print(f"\n\n[WAIT] Sleeping {jittered_wait:.2f}s (RPM/TPM limit)\n\n")
-    #         time.sleep(jittered_wait)
-
-    # def _chat_with_backoff_threadsafe(self, prompt, max_retries=5):
-    #     '''
-    #     Chat with the LLM engine, implementing a backoff strategy for rate
-    #     limiting.
-        
-    #     :param prompt: The prompt to be sent to the LLM engine.
-    #     :param max_retries: The maximum number of retries in case of rate
-    #         limiting. Default is 5.
-    #     '''
-    #     retry_count = 0
-    #     while retry_count <= max_retries:
-    #         try:
-    #             self._wait_for_slot()
-    #             response = self.llm_engine.chat(prompt)
-    #             return response
-    #         except Exception as e:
-    #             retry_count += 1
-    #             sleep_time = (2 ** retry_count) + random.uniform(0, 1)
-    #             print ('Rate limit hit. Retrying in {sleep_time} seconds...')
-    #             time.sleep(sleep_time)
-        
-    #     return 'Failed after retries'
-    
-    # def chat_with_backoff_threadsafe_bis(self, prompt, max_retries=5):
-    #     '''
-    #     '''
-    #     retry_count = 0
-    #     while retry_count <= max_retries:
-    #         try:
-    #             self.wait_for_slot()
-    #             response = prompt
-    #             return response
-    #         except RateLimitError:
-    #             retry_count += 1
-    #             sleep_time = (2 ** retry_count) + random.uniform(0, 1)
-    #             print ('Rate limit hit. Retrying in {sleep_time} seconds...')
-    #             time.sleep(sleep_time)
-        
-    #     return 0
-
-    # def _call_with_backoff(self, prompt: str, max_retries: int = 5) -> str:
-    #     '''
-    #     Generate content with backoff strategy for rate limiting.
-
-    #     :param prompt: The prompt to be generated.
-    #     :param max_retries: The maximum number of retries in case of rate
-    #         limiting. Default is 5.
-        
-    #     :return: The generated content.
-    #     '''
-    #     while not self.stop_flag.is_set():
-    #         with self.semaphore:
-    #             try:
-    #                 # estimate tokens
-    #                 estimated_tokens = self.estimate_tokens(prompt)
-
-    #                 # enforce rate limits
-    #                 self._enforce_rate_limits(estimated_tokens)
-
-    #                 # generate content
-    #                 response = self.client.chat.completions.create(
-    #                     model=self.model_name,
-    #                     messages=[
-    #                         {
-    #                             'role': 'user',
-    #                             'content': prompt
-    #                         }
-    #                     ]
-    #                 )
-    #                 return response['choices'][0]['message']['content']
-    #             except Exception as e:
-    #                 if isinstance(e, RateLimitError):
-    #                     # handle rate limit error
-    #                     print('Rate limit hit. Retrying...')
-    #                     time.sleep(2 ** max_retries + random.uniform(0, 1))
-    #                     continue
-    #                 else:
-    #                     raise e
-    #             finally:
-    #                 # release semaphore
-    #                 if self.semaphore is not None:
-    #                     self.semaphore.release()
-        
-    #     return None
-    
-

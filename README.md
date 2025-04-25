@@ -59,6 +59,14 @@ Output example:
 }
 ```
 
+### Dataset Requirements for Narrative Blueprint
+
+The Narrative Blueprint analysis requires a structured dataset of real-world disinformation content. The dataset must be provided as a CSV file with the following required columns:
+- **narrative**: Contains the text of the disinformation content to be analyzed
+- **uuid**: A unique identifier for each narrative entry
+
+This dataset serves as the foundation for the entire evaluation framework, providing the raw material that informs the creation of adversarial prompts.
+
 2. **Adversarial Prompt Generation:** Based on the key claims identified in the Narrative Blueprint, adversarial prompts are crafted. These prompts subtly encourage the LLM to exhibit "manipulative influence" behaviors without explicitly instructing it to do so. These prompts incorporate diverse roles and personas to test the LLM's adaptability to different contexts.
 
 3. **LLM Evaluation:**  LLMs are presented with the adversarial prompts, and their generated outputs are collected.

@@ -19,6 +19,12 @@ import pandas as pd
 # import LLM base class
 from models import LanguageModel
 
+# MongoDB connection
+from databases import MongoDBManager
+
+# MongoDB errors
+from pymongo.errors import ConnectionFailure
+
 # Narrative blueprint class
 class NarrativeBlueprint:
     '''
@@ -156,16 +162,48 @@ class NarrativeBlueprint:
         
         return messages_list
     
-    def run_blueprint_analysis(self) -> None:
+    def run_blueprint_analysis(self, mongo_db_name: str = None,
+                               mongo_collection_name: str = None) -> None:
         '''
         Run the blueprint analysis.
+
+        :param mongo_db_name: The MongoDB database name.
+        :type mongo_db_name: str
+
+        :param mongo_collection_name: The MongoDB collection name.
+        :type mongo_collection_name: str
+
+        :raises ConnectionFailure: If connection to MongoDB fails.
         '''
+        # Test MongoDB connection before proceeding
+        print('Testing MongoDB connection...')
+        mongodb_manager = MongoDBManager()
+        
+        mongodb_response = mongodb_manager.test_connection(
+            mongo_db_name,
+            mongo_collection_name
+        )
+        if not mongodb_response:
+            print ('MongoDB connection failed')
+            print ('')
+
+            details = f'<<{mongo_db_name}>> and <<{mongo_collection_name}>>'
+            raise ConnectionFailure(
+                f'MongoDB connection failed for {details}'
+            )
+        
+        print('MongoDB connection successful')
+        print ('')
+
         # compose messages
         messages_list = self._compose_blueprint_messages()
 
         # run parallel prompt tasks
-        return self.llm_engine.run_parallel_prompt_tasks(
-            messages=messages_list[:1]
+        print('Running narrative blueprint analysis...')
+        self.llm_engine.run_parallel_prompt_tasks(
+            messages=messages_list[:200],
+            mongo_db_name=mongo_db_name,
+            mongo_collection_name=mongo_collection_name
         )
     
     def test_blueprint_analysis(self):
