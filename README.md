@@ -55,7 +55,8 @@ Output example:
         "Germany risks becoming a failed state due to mismanagement.",
         "Energy prices are leading to an unsustainable debt situation.",
         "Infrastructure issues and military inadequacies contribute to national decline."
-    ]
+    ],
+    "uuid": "6dx-000-7fz"
 }
 ```
 
