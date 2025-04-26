@@ -102,6 +102,14 @@ blueprint_arguments.add_argument(
     )
 )
 
+blueprint_arguments.add_argument(
+    '--sample-size',
+    type=int,
+    metavar='',
+    default=None,
+    help='Number of narratives to process for blueprint generation'
+)
+
 # blueprint MongoDB arguments
 blueprint_mongodb_arguments = blueprint_parser.add_argument_group(
     'Blueprint MongoDB arguments'
@@ -136,7 +144,6 @@ evaluation_parser = subparsers.add_parser(
 # parse arguments
 args = vars(parser.parse_args())
 
-
 # start process
 log_text = f'''
 > Starting program at: {time.ctime()}
@@ -152,7 +159,6 @@ blueprint = NarrativeBlueprint(
 
 # run blueprint analysis
 blueprint.run_blueprint_analysis()
-
 
 # end process
 log_text = f'''

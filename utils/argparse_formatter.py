@@ -4,14 +4,14 @@
 import textwrap
 
 # argparse formatter
-from argparse import HelpFormatter
+from argparse import HelpFormatter, RawDescriptionHelpFormatter
 
-class CustomHelpFormatter(HelpFormatter):
+class CustomHelpFormatter(RawDescriptionHelpFormatter):
     '''
     Custom formatter for argparse help output.
     
-    Improves subcommand display and wraps long text for better
-    readability.
+    Extends RawDescriptionHelpFormatter to preserve formatting in help text
+    while improving subcommand display.
     '''
     def __init__(self, prog, indent_increment=2, max_help_position=40, width=120):
         super().__init__(prog, indent_increment, max_help_position, width)
@@ -40,3 +40,34 @@ class CustomHelpFormatter(HelpFormatter):
             return text.splitlines()
         
         return textwrap.wrap(text, width)
+        
+    def _format_usage(self, usage, actions, groups, prefix):
+        '''
+        Format the usage string to ensure compatibility with argparse expectations.
+        This fixes issues with the assertion error in argparse's _format_usage method.
+        '''
+        if usage is None:
+            usage = '%(prog)s' % dict(prog=self._prog)
+            
+        # if usage is just default, calculate usage from actions
+        actions_by_positionals = []
+        actions_by_optionals = []
+        for action in actions:
+            if action.option_strings:
+                actions_by_optionals.append(action)
+            else:
+                actions_by_positionals.append(action)
+                
+        # format positional arguments as positional
+        format_string = self._format_actions_usage(actions_by_positionals, groups)
+        if format_string:
+            usage = ' '.join([usage, format_string])
+            
+        # format optional arguments as optionals
+        format_string = self._format_actions_usage(actions_by_optionals, groups)
+        if format_string:
+            opt_usage = format_string.replace(',', ' ')
+            usage = ' '.join([usage, '[%s]' % opt_usage])
+            
+        # wrap the usage parts if needed
+        return '%s%s\n\n' % (prefix, usage)

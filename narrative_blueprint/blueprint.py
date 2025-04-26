@@ -87,7 +87,10 @@ class NarrativeBlueprint:
             raise ValueError(
                 f'Narratives dataset missing required columns: {missing_columns}'
             )
-    
+        
+        # sample size from args
+        self.sample_size = self.args.get('sample_size', None)
+
     def _load_system_prompt(self, language: str = 'en') -> str:
         '''
         Load the system prompt from a file.
@@ -216,12 +219,16 @@ class NarrativeBlueprint:
         # compose messages
         uuids, messages_list = self._compose_blueprint_messages()
 
+        # use sample size if provided
+        if self.sample_size:
+            uuids = uuids[:self.sample_size]
+            messages_list = messages_list[:self.sample_size]
+
         # run parallel prompt tasks
         print('Running narrative blueprint analysis...')
-        sample_size = 50
         self.llm_engine.run_parallel_prompt_tasks(
-            uuids=uuids[:sample_size],
-            messages=messages_list[:sample_size],
+            uuids=uuids,
+            messages=messages_list,
             mongo_db_name=self.mongo_db_name,
             mongo_collection_name=self.mongo_collection_name
         )

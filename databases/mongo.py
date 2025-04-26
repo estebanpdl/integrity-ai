@@ -22,7 +22,9 @@ class MongoDBManager(Database):
         connection_string = 'mongodb://localhost:27017/'
         self.client = MongoClient(connection_string)
 
-    def test_access_to_db_and_collection(self, db_name: str, collection_name: str) -> bool:
+    def test_access_to_db_and_collection(self,
+                                         db_name: str,
+                                         collection_name: str) -> bool:
         '''
         Tests access to the specified database and collection.
 
@@ -74,5 +76,10 @@ class MongoDBManager(Database):
         '''
         db = self.client[db_name]
         collection = db[collection_name]
-        uuids = [doc['uuid'] for doc in collection.find({}, {'uuid': 1, '_id': 0})]
+        uuids = [
+            doc['uuid'] for doc in collection.find(
+                {}, {'uuid': 1, '_id': 0}
+            )
+        ]
+        
         return uuids
