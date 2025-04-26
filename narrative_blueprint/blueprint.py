@@ -76,8 +76,17 @@ class NarrativeBlueprint:
             raise ValueError('The `narrative_path` argument is required')
         
         self.narratives = self._load_narratives(narrative_path)
-        if 'narrative' not in self.narratives.columns:
-            raise ValueError('The `narrative` column is required in the narratives DataFrame')
+
+        # check required columns in narratives dataset
+        required_columns = ['narrative', 'uuid']
+        missing_columns = [
+            col for col in required_columns
+            if col not in self.narratives.columns
+        ]
+        if missing_columns:
+            raise ValueError(
+                f'Narratives dataset missing required columns: {missing_columns}'
+            )
     
     def _load_system_prompt(self, language: str = 'en') -> str:
         '''
@@ -209,7 +218,7 @@ class NarrativeBlueprint:
 
         # run parallel prompt tasks
         print('Running narrative blueprint analysis...')
-        sample_size = 100
+        sample_size = 50
         self.llm_engine.run_parallel_prompt_tasks(
             uuids=uuids[:sample_size],
             messages=messages_list[:sample_size],

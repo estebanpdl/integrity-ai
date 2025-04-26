@@ -2,11 +2,10 @@
 
 # import modules
 import time
-import textwrap
 
 # import argparse
 from argparse import (
-	ArgumentParser, HelpFormatter, SUPPRESS
+	ArgumentParser, SUPPRESS
 )
 
 # Narrative blueprint
@@ -15,37 +14,13 @@ from narrative_blueprint import NarrativeBlueprint
 # language models
 from models import OpenAIGPT
 
+# argparse formatter
+from utils.argparse_formatter import CustomHelpFormatter
+
 '''
 Arguments
 
 '''
-
-class CustomHelpFormatter(HelpFormatter):
-    def __init__(self, prog, indent_increment=2, max_help_position=40, width=120):
-        super().__init__(prog, indent_increment, max_help_position, width)
-    
-    def _format_action(self, action):
-        # For subparsers only, customize the help output
-        if action.choices:
-            # Get the subaction help strings
-            subactions = list(action._get_subactions())
-            # Format the help for each subcommand
-            parts = []
-            for subaction in subactions:
-                # Build the complete help string with proper formatting
-                cmd = "  {:<12} {}".format(subaction.dest, subaction.help)
-                parts.append(cmd)
-            # Join all parts with newlines
-            return "\n".join(parts)
-        return super()._format_action(action)
-
-    def _split_lines(self, text, width):
-        """Wrap text to respect the width but maintain indentation for all lines"""
-        if '\n' in text:
-            # For text with explicit newlines, respect those
-            return text.splitlines()
-        return textwrap.wrap(text, width)
-
 parser = ArgumentParser(
     prog='Integrity AI',
     description='Integrity AI: Blueprint & Evaluation Toolkit',

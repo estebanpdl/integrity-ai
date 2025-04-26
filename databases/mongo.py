@@ -74,5 +74,5 @@ class MongoDBManager(Database):
         '''
         db = self.client[db_name]
         collection = db[collection_name]
-        uuids = collection.distinct('uuid')
+        uuids = [doc['uuid'] for doc in collection.find({}, {'uuid': 1, '_id': 0})]
         return uuids

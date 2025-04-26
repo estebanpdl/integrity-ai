@@ -3,11 +3,13 @@
 # import modules
 import os
 import ast
+import json
 import time
 import signal
 import random
 import openai
 import tiktoken
+import traceback
 import threading
 
 # dotenv for environment variables
@@ -57,6 +59,9 @@ class OpenAIGPT(LanguageModel):
 
     # jitter min value
     DEFAULT_JITTER = 0.15
+
+    # output parameters
+    TEMPERATURE = 0.5
 
     def __init__(self, model_name: str):
         '''
@@ -378,22 +383,21 @@ class OpenAIGPT(LanguageModel):
                         pbar
                     )
 
-                    # # make request
-                    # response = self.client.chat.completions.create(
-                    #     model=self.model_name,
-                    #     messages=message
-                    # )
-
-                    # self._process_response(uuid, response, mongo_db_name, mongo_collection_name)
-
-                    # update token usage log
-                    self.token_usage_log.append(
-                        (
-                            time.time(),
-                            estimated_tokens,
-                            random.randint(400, 500)
-                        )
+                    # make request
+                    response = self.client.chat.completions.create(
+                        model=self.model_name,
+                        messages=message,
+                        temperature=self.TEMPERATURE,
+                        response_format={'type': 'json_object'}
                     )
+
+                    self._process_response(
+                        uuid,
+                        response,
+                        mongo_db_name,
+                        mongo_collection_name
+                    )
+
                     return
                     
                 except RateLimitError:
@@ -415,11 +419,14 @@ class OpenAIGPT(LanguageModel):
                         pbar,
                         f'[ERROR] prompt #{request_id} error'
                     )
+
+                    # capture full traceback
+                    tb_str = traceback.format_exc()
                     
                     # write to log file
                     e_name = e.__class__.__name__
                     self._log_write(
-                        f'[ERROR] prompt #{request_id} error: {e_name}'
+                        f'[ERROR] prompt #{uuid} error: {e_name} - {e}\nTraceback:\n{tb_str}'
                     )
 
                     return
