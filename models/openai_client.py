@@ -400,7 +400,7 @@ class OpenAIGPT(LanguageModel):
 
                     return
                     
-                except RateLimitError:
+                except RateLimitError as e_rate_limit:
                     # update progress bar
                     self._update_tqdm_description(
                         pbar,
@@ -439,7 +439,7 @@ class OpenAIGPT(LanguageModel):
             )
             
             # write to log file
-            self._log_write(f"[FAILED] prompt #{request_id} exceeded retries")
+            self._log_write(f"[FAILED] prompt #{uuid} exceeded retries - {e_rate_limit}")
             return
 
     def run_parallel_prompt_tasks(self,
