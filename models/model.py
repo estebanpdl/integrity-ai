@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 
 '''
-Defines the abstract base class
+Defines LanguageModel base class
 
 '''
+
+# search: Sketch of new LanguageModel
 
 # import modules
 from abc import ABC, abstractmethod

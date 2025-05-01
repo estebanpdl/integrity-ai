@@ -27,15 +27,21 @@ Formato JSON:
     "content_topics": {
         "government": (binary),
         "military": (binary),
-        "political_party": (binary),
         "elections": (binary),
         "non_state_political_actor": (binary),
         "business": (binary),
         "influential_individuals": (binary),
+        "political_party": (binary),
         "racial_ethnic_religious_sexual_identity_group": (binary),
+        "national_security": (binary),
         "terrorism": (binary),
+        "crime": (binary),
+        "cybersecurity": (binary),
         "immigration": (binary),
-        "economic_issue: (binary),
+        "economic_issue": (binary),
+        "health": (binary),
+        "environment": (binary),
+        "conspiracy": (binary),
         "other": (free text)
     },
     "disinformation_tactic": [

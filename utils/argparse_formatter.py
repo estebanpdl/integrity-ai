@@ -4,7 +4,7 @@
 import textwrap
 
 # argparse formatter
-from argparse import HelpFormatter, RawDescriptionHelpFormatter
+from argparse import RawDescriptionHelpFormatter
 
 class CustomHelpFormatter(RawDescriptionHelpFormatter):
     '''
@@ -25,7 +25,7 @@ class CustomHelpFormatter(RawDescriptionHelpFormatter):
             parts = []
             for subaction in subactions:
                 # build the complete help string with proper formatting
-                cmd = f"  {subaction.dest:<12} {subaction.help or ''}"
+                cmd = f"  {subaction.metavar or subaction.dest:<20} {subaction.help or ''}"
                 parts.append(cmd)
             
             # join all parts with newlines
@@ -46,6 +46,9 @@ class CustomHelpFormatter(RawDescriptionHelpFormatter):
         Format the usage string to ensure compatibility with argparse expectations.
         This fixes issues with the assertion error in argparse's _format_usage method.
         '''
+        if prefix is None:
+            prefix = 'usage: '
+        
         if usage is None:
             usage = '%(prog)s' % dict(prog=self._prog)
             

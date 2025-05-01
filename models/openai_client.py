@@ -3,7 +3,6 @@
 # import modules
 import os
 import ast
-import json
 import time
 import signal
 import random

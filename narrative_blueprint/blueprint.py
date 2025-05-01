@@ -51,7 +51,7 @@ class NarrativeBlueprint:
         :type args: dict
 
         Example:
-            >>> from models.openai_client import 
+            >>> from models.openai_client import OpenAIGPT
             >>> llm_engine = OpenAIGPT(model="gpt-4o-mini")
             >>> blueprint = NarrativeBlueprint(llm_engine=llm_engine)
         '''
