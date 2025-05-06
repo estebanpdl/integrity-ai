@@ -34,6 +34,22 @@ class VectorModel(ABC):
             f.write(message + '\n')
 
     @abstractmethod
+    def estimate_tokens(self, text: str) -> int:
+        '''
+        Estimate the number of tokens in data.
+        '''
+        pass
+
+    @abstractmethod
+    def _safe_embed_request(self, batch: list[str],
+                            request_id: int,
+                            retry_max: int = 3) -> list[list[float]]:
+        '''
+        Safe embedding request.
+        '''
+        pass
+
+    @abstractmethod
     def compute_embeddings(self, data: list[str]) -> list[list[float]]:
         '''
         Compute embeddings for a list of strings.

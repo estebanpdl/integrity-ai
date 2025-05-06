@@ -118,7 +118,7 @@ class ClaimAnalysis:
 
         # save data
         df.to_csv(
-            f'{self.output_path}/embeddings.csv',
+            f'{self.output_path}/embeddings_gemini.csv',
             encoding='utf-8',
             index=False
         )
@@ -156,11 +156,10 @@ class ClaimAnalysis:
 
         :return: None
         '''
-        claims = self.claims['claim'].tolist()[:15000]
-        uuids = self.claims['uuid'].tolist()[:15000]
+        claims = self.claims['claim'].tolist()
+        uuids = self.claims['uuid'].tolist()
 
         # compute embeddings
-        print('Computing embeddings...')
         embeddings = self.vector_model.compute_embeddings(claims)
 
         # process results
