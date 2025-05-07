@@ -13,7 +13,7 @@ ${narrative}
 
 Identify the following sections based on your assessment of the narrative to complete your final JSON response:
 
-- Content topics: Indicate which topics are evident in the disinformation campaign by assigning a value of 1 or 0 to each category. If "other" is selected, provide a brief description. Categories are not mutually exclusive. All relevant categories can be added.
+- Content topics: Indicate which topics are evident in the disinformation campaign by assigning a value of 1 or 0 to each category. If "other" is selected, provide a brief description. Categories are not mutually exclusive. All relevant categories can be added. Mark the 'neutral' category when the topic appears unrelated to political intentions, disinformation, or manipulation (such as sports, culture, science, etc.). Be aware, however, that narratives may present an apparently neutral tone while still containing embedded messages designed to advance political propaganda or spread disinformation.
 - Disinformation tactic: Identify and describe the primary disinformation or manipulation narrative tactic used in the narrative, e.g., fear-mongering, false dichotomy, polarize, distort facts, harass, intimidate, libel, political segmentation, dismiss, divide, spread hate, political propaganda, influence electorate, etc.
 - Target audience: Infer the most likely target audience for this narrative based on the language used, the topics discussed, the tone and style. Be as specific as possible. e.g., Specific Racial, Ethnic, Religious, or Sexual Identity Group (name the group if possible), "Non-State Political Actor," "elderly voters worried about healthcare costs," "electorate," "people with strong nationalist beliefs," "immigrants", etc.
 - Intent: A string containing one or two succinct sentences identifying the intent of the primary narrative. Be as concise as possible.
@@ -42,6 +42,7 @@ JSON Format:
         "health": (binary),
         "environment": (binary),
         "conspiracy": (binary),
+        "neutral": (binary),
         "other": (free text)
     },
     "disinformation_tactic": [

@@ -45,7 +45,7 @@ def create_claim_analysis_parser(subparsers: ArgumentParser) -> ArgumentParser:
     claim_analysis_arguments.add_argument(
         '--model',
         type=str,
-        default='text-embedding-3-large',
+        default='text-embedding-3-small',
         metavar='',
         help='Embedding model to use for claim analysis'
     )
