@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 # import modules
-import os
 import ast
 import json
 import time

@@ -47,7 +47,7 @@ def create_blueprint_parser(subparsers: ArgumentParser) -> ArgumentParser:
         type=str,
         default='gpt-4o-mini',
         metavar='',
-        help='Language model to use for blueprint generation'
+        help='OpenAI model to use for blueprint generation'
     )
 
     blueprint_arguments.add_argument(

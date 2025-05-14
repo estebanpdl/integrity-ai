@@ -1,7 +1,6 @@
 # -*- coding: utf-8 -*-
 
 # import modules
-import os
 import ast
 import time
 import signal
@@ -45,6 +44,10 @@ class OpenAIGPT(LanguageModel):
             'tpm': 200000
         },
         'gpt-4.1-nano': {
+            'rpm': 500,
+            'tpm': 200000
+        },
+        'gpt-3.5-turbo': {
             'rpm': 500,
             'tpm': 200000
         }
@@ -99,10 +102,6 @@ class OpenAIGPT(LanguageModel):
         # shared threading locks
         self.rate_limit_lock = threading.Lock()
         self.token_lock = threading.Lock()
-        self.tqdm_lock = threading.Lock()
-
-        # shared threading event
-        self.stop_flag = threading.Event()
 
         # share controls for rate limiting
         self.request_timestamps = []
@@ -115,6 +114,12 @@ class OpenAIGPT(LanguageModel):
         # MongoDB connection
         self.mongodb_manager = MongoDBManager()
 
+    def get_log_file(self) -> str:
+        '''
+        Get the log file.
+        '''
+        return self.log_file
+    
     def _get_average_completion_tokens(self) -> int:
         '''
         Get the average number of tokens used in responses.
@@ -140,63 +145,6 @@ class OpenAIGPT(LanguageModel):
         '''
         # estimate tokens
         return len(self.encoding.encode(prompt))
-    
-    def _log_write(self, message: str) -> None:
-        '''
-        Write a message to the log file.
-
-        :param message: The message to be written to the log file.
-        :type message: str
-
-        :return: None
-        '''
-        # create log directory if it doesn't exist
-        log_dir = os.path.dirname(self.log_file)
-        if not os.path.exists(log_dir):
-            os.makedirs(log_dir)
-
-        # write to log file
-        with open(self.log_file, 'a') as f:
-            f.write(message + '\n')
-    
-    def _update_tqdm_description(self, pbar: tqdm, message: str) -> None:
-        '''
-        Update the tqdm progress bar description safely.
-
-        :param pbar: The tqdm progress bar instance.
-        :type pbar: tqdm
-
-        :param message: The message to be displayed in the progress bar.
-        :type message: str
-
-        :return: None
-        '''
-        with self.tqdm_lock:
-            pbar.set_description(message)
-    
-    def _update_tqdm_postfix(self, pbar: tqdm, data: dict) -> None:
-        '''
-        Update the tqdm progress bar postfix (metrics) safely.
-
-        :param pbar: The tqdm progress bar instance.
-        :param data: A dictionary of metric names and values.
-        '''
-        with self.tqdm_lock:
-            pbar.set_postfix(data)
-
-    def _signal_handler(self, sig, frame) -> None:
-        '''
-        Signal handler for Ctrl+C.
-
-        :param sig: The signal number.
-        :type sig: int
-
-        :param frame: The current stack frame.
-        :type frame: frame
-
-        :return: None
-        '''
-        self.stop_flag.set()
     
     def _enforce_rate_limits(self, estimated_tokens: int,
                              pbar: tqdm = None) -> None:
