@@ -8,7 +8,6 @@ import random
 import openai
 import tiktoken
 import traceback
-import threading
 
 # dotenv for environment variables
 from dotenv import load_dotenv
@@ -33,45 +32,13 @@ class OpenAIGPT(LanguageModel):
     '''
     OpenAIGPT class
     '''
-    # OpenAI model limits
-    MODEL_LIMITS = {
-        'gpt-4o-mini': {
-            'rpm': 500,
-            'tpm': 200000
-        },
-        'gpt-4.1-mini': {
-            'rpm': 500,
-            'tpm': 200000
-        },
-        'gpt-4.1-nano': {
-            'rpm': 500,
-            'tpm': 200000
-        },
-        'gpt-3.5-turbo': {
-            'rpm': 500,
-            'tpm': 200000
-        }
-    }
-
-    # average token usage
-    AVERAGE_TOKEN_USAGE = 1000
-
-    # maximum number of concurrent requests
-    MAX_CONCURRENT_REQUESTS = 10
-
-    # jitter min value
-    DEFAULT_JITTER = 0.15
-
-    # output parameters
-    TEMPERATURE = 0.5
-
     def __init__(self, model_name: str):
         '''
         Initialize the OpenAIGPT class.
 
         :param model_name: The name of the OpenAI model to be used.
         '''
-        super().__init__()
+        super().__init__(provider='openai', model_name=model_name)
 
         # load environment variables
         env_file_path = './config/.env'
@@ -83,11 +50,7 @@ class OpenAIGPT(LanguageModel):
         # OpenAI model
         self.model_name = model_name
 
-        # get model limits
-        self.max_requests_per_min = self.MODEL_LIMITS[self.model_name]['rpm']
-        self.max_tokens_per_min = self.MODEL_LIMITS[self.model_name]['tpm']
-
-        # model token encoding
+        # OpenAI model token encoding
         try:
             self.encoding = tiktoken.encoding_for_model(self.model_name)
         except Exception as KeyError:
@@ -96,42 +59,17 @@ class OpenAIGPT(LanguageModel):
         # log file
         self.log_file = './logs/openai_client.log'
 
-        # API limits
-        self.request_interval = 60.0 / self.max_requests_per_min
-
-        # shared threading locks
-        self.rate_limit_lock = threading.Lock()
-        self.token_lock = threading.Lock()
-
-        # share controls for rate limiting
-        self.request_timestamps = []
-        self.last_request_time = [0.0]
-        self.token_usage_log = []
-
-        # threading semaphore
-        self.semaphore = threading.Semaphore(self.MAX_CONCURRENT_REQUESTS)
-
         # MongoDB connection
         self.mongodb_manager = MongoDBManager()
-
+    
     def get_log_file(self) -> str:
         '''
         Get the log file.
+
+        :return: The log file.
+        :rtype: str
         '''
         return self.log_file
-    
-    def _get_average_completion_tokens(self) -> int:
-        '''
-        Get the average number of tokens used in responses.
-
-        :return: The average number of tokens used in responses.
-        :rtype: int
-        '''
-        if not self.token_usage_log:
-            return self.AVERAGE_TOKEN_USAGE
-        
-        completion_tokens = [c for _, _, c in self.token_usage_log]
-        return int(sum(completion_tokens) / len(completion_tokens))
 
     def _estimate_tokens(self, prompt: str) -> int:
         '''
@@ -146,88 +84,25 @@ class OpenAIGPT(LanguageModel):
         # estimate tokens
         return len(self.encoding.encode(prompt))
     
-    def _enforce_rate_limits(self, estimated_tokens: int,
-                             pbar: tqdm = None) -> None:
-        '''
-        Enforce rate limits for the OpenAI API.
-        This method ensures that the number of requests and tokens used
-        per minute does not exceed the specified limits.
-
-        :param estimated_tokens: The estimated tokens in the prompt.
-        :type estimated_tokens: int
-
-        :param pbar: The tqdm progress bar.
-        :type pbar: tqdm
-
-        :return: None
-        '''
-        # wait for rate limit slot
-        while True:
-            wait_time = 0
-            with self.rate_limit_lock, self.token_lock:
-                now = time.time()
-
-                # timestamps and tokens used
-                self.request_timestamps[:] = [
-                    t for t in self.request_timestamps if now - t < 60.0
-                ]
-                self.token_usage_log[:] = [
-                    (t, p, c) for t, p, c in self.token_usage_log if now - t < 60.0
-                ]
-
-                if len(self.request_timestamps) >= self.max_requests_per_min:
-                    if self.request_timestamps:
-                        oldest_request_time = self.request_timestamps[0]
-                        request_wait = 60.0 - (now - oldest_request_time)
-                    else:
-                        request_wait = 1.0
-                    wait_time = max(wait_time, request_wait)
-                
-                tokens_used = sum(p + c for _, p, c in self.token_usage_log)
-
-                # update progress bar
-                self._update_tqdm_postfix(pbar, {'Tokens used/60s': tokens_used})
-
-                # response buffer
-                response_buffer = self._get_average_completion_tokens()
-                agg_tokens = tokens_used + estimated_tokens + response_buffer
-                if agg_tokens > self.max_tokens_per_min:
-                    if self.token_usage_log:
-                        oldest_token_time = self.token_usage_log[0][0]
-                        token_wait = 60.0 - (now - oldest_token_time)
-                    else:
-                        token_wait = 1.0
-                    wait_time = max(wait_time, token_wait)
-                
-                if wait_time == 0:
-                    # no enforced wait time
-                    now = time.time()
-                    self.request_timestamps.append(now)
-
-                    # add jitter to avoid thread pileup
-                    jitter = self.DEFAULT_JITTER + random.uniform(0, 0.05)
-                    self.stop_flag.wait(jitter)
-                    break
-
-            # wait_time != 0 - enforced rate-limit sleep - when over RPM/TPM
-            jittered_wait = wait_time + random.uniform(0.05, 0.25)
-            self._update_tqdm_description(
-                pbar,
-                f'[WAITING] Sleeping {jittered_wait:.2f}s (RPM/TPM limit)'
-            )
-
-            self.stop_flag.wait(jittered_wait)
-    
     def _process_response(self,
                           uuid: str,
+                          system_prompt: str,
+                          user_prompt: str,
                           response: openai.ChatCompletion,
                           mongo_db_name: str = None,
-                          mongo_collection_name: str = None) -> None:
+                          mongo_collection_name: str = None,
+                          task: str = None) -> None:
         '''
         Process API response.
 
         :param uuid: The uuid of the narrative that has been processed.
         :type uuid: str
+
+        :param system_prompt: The system prompt used to generate the response.
+        :type system_prompt: str
+
+        :param user_prompt: The user prompt used to generate the response.
+        :type user_prompt: str
 
         :param response: The response from the OpenAI API.
         :type response: openai.ChatCompletion
@@ -237,6 +112,9 @@ class OpenAIGPT(LanguageModel):
 
         :param mongo_collection_name: Name of the MongoDB collection.
         :type mongo_collection_name: str
+
+        :param task: The task to be processed.
+        :type task: str
 
         :return: None
         '''
@@ -257,10 +135,23 @@ class OpenAIGPT(LanguageModel):
         response_content = response.choices[0].message.content
 
         # parse response
-        response_content = ast.literal_eval(response_content)
+        if task == 'blueprint':
+            response_content = ast.literal_eval(response_content)
 
-        # add uuid to response
-        response_content['uuid'] = uuid
+            # add uuid to response
+            response_content['uuid'] = uuid
+        else:
+            # build response content data
+            response_content = {
+                'uuid': uuid,
+                'model': self.model_name,
+                'system_prompt': system_prompt,
+                'user_prompt': user_prompt,
+                'response': response_content,
+                'prompt_tokens_used': prompt_tokens_used,
+                'completion_tokens_used': completion_tokens_used,
+                'total_tokens_used': prompt_tokens_used + completion_tokens_used
+            }
 
         # get collection
         collection = self.mongodb_manager.get_collection(
@@ -279,6 +170,8 @@ class OpenAIGPT(LanguageModel):
                            mongo_db_name: str = None,
                            mongo_collection_name: str = None,
                            pbar: tqdm = None,
+                           response_format: dict = None,
+                           task: str = None,
                            max_retries: int = 5) -> None:
         '''
         Call the OpenAI API with a backoff strategy.
@@ -300,6 +193,12 @@ class OpenAIGPT(LanguageModel):
 
         :param pbar: The tqdm progress bar.
         :type pbar: tqdm
+
+        :param response_format: The response format.
+        :type response_format: dict
+
+        :param task: The task to be processed.
+        :type task: str
 
         :param max_retries: The maximum number of retries.
         :type max_retries: int
@@ -335,14 +234,17 @@ class OpenAIGPT(LanguageModel):
                         model=self.model_name,
                         messages=message,
                         temperature=self.TEMPERATURE,
-                        response_format={'type': 'json_object'}
+                        response_format=response_format
                     )
 
                     self._process_response(
                         uuid,
+                        system_prompt,
+                        user_prompt,
                         response,
                         mongo_db_name,
-                        mongo_collection_name
+                        mongo_collection_name,
+                        task
                     )
 
                     return
@@ -393,7 +295,9 @@ class OpenAIGPT(LanguageModel):
                                   uuids: list = None,
                                   messages: list = None,
                                   mongo_db_name: str = None,
-                                  mongo_collection_name: str = None) -> None:
+                                  mongo_collection_name: str = None,
+                                  response_format: dict = None,
+                                  task: str = None) -> None:
         '''
         Run parallel prompt tasks with thread pooling and rate-limiting.
 
@@ -408,6 +312,12 @@ class OpenAIGPT(LanguageModel):
 
         :param mongo_collection_name: Name of the MongoDB collection.
         :type mongo_collection_name: str
+
+        :param response_format: The response format.
+        :type response_format: dict
+
+        :param task: The task to be processed.
+        :type task: str
 
         :return: None
         '''
@@ -425,7 +335,9 @@ class OpenAIGPT(LanguageModel):
                         message,
                         mongo_db_name,
                         mongo_collection_name,
-                        pbar
+                        pbar,
+                        response_format,
+                        task
                     ): i
                     for i, (uuid, message) in enumerate(zip(uuids, messages))
                 }

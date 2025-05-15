@@ -9,6 +9,9 @@ from cli import parser
 # import runners
 from runners import command_dispatcher
 
+# import models
+from models import GroqModels, OpenAIGPT
+
 def main():
     # parse arguments
     args = vars(parser.parse_args())

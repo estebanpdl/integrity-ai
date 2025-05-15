@@ -5,10 +5,11 @@ Defines LanguageModel base class
 
 '''
 
-# search: Sketch of new LanguageModel
-
 # import modules
 import os
+import time
+import json
+import random
 import threading
 
 # abstract base class
@@ -22,16 +23,66 @@ class LanguageModel(ABC):
     '''
     LanguageModel abstract base class
     '''
-    def __init__(self):
+    # average token usage
+    AVERAGE_TOKEN_USAGE = 1000
+
+    # maximum number of concurrent requests
+    MAX_CONCURRENT_REQUESTS = 10
+
+    # jitter min value
+    DEFAULT_JITTER = 0.15
+
+    # output parameters
+    TEMPERATURE = 1
+
+    def __init__(self, provider: str, model_name: str):
         '''
         Initialize LanguageModel abstract base class
+
+        :param provider: The provider of the model.
+        :type provider: str
+
+        :param model_name: The name of the model.
+        :type model_name: str
         '''
+        # get model limits
+        model_limits_config = self.get_model_limits()
+        self.model_limits = model_limits_config[provider][model_name]
+        self.max_requests_per_min = self.model_limits['rpm']
+        self.max_tokens_per_min = self.model_limits['tpm']
+
+        # API limits
+        self.request_interval = 60.0 / self.max_requests_per_min
+
         # shared threading locks
+        self.rate_limit_lock = threading.Lock()
+        self.token_lock = threading.Lock()
         self.tqdm_lock = threading.Lock()
+
+        # share controls for rate limiting
+        self.request_timestamps = []
+        self.last_request_time = [0.0]
+        self.token_usage_log = []
+
+        # threading semaphore
+        self.semaphore = threading.Semaphore(self.MAX_CONCURRENT_REQUESTS)
 
         # shared threading event
         self.stop_flag = threading.Event()
 
+    def get_model_limits(self) -> dict:
+        '''
+        Get the model limits.
+
+        :return: The model limits.
+        :rtype: dict
+        '''
+        path = './config/model_limits.json'
+        with open(path, 'r', encoding='utf-8') as f:
+            model_limits = json.load(f)
+        
+        return model_limits
+    
     @abstractmethod
     def get_log_file(self) -> str:
         '''
@@ -60,6 +111,16 @@ class LanguageModel(ABC):
         with open(log_file, 'a') as f:
             f.write(message + '\n')
     
+    def _update_tqdm_postfix(self, pbar: tqdm, data: dict) -> None:
+        '''
+        Update the tqdm progress bar postfix (metrics) safely.
+
+        :param pbar: The tqdm progress bar instance.
+        :param data: A dictionary of metric names and values.
+        '''
+        with self.tqdm_lock:
+            pbar.set_postfix(data)
+    
     def _update_tqdm_description(self, pbar: tqdm, message: str) -> None:
         '''
         Update the tqdm progress bar description safely.
@@ -75,15 +136,90 @@ class LanguageModel(ABC):
         with self.tqdm_lock:
             pbar.set_description(message)
     
-    def _update_tqdm_postfix(self, pbar: tqdm, data: dict) -> None:
+    def _get_average_completion_tokens(self) -> int:
         '''
-        Update the tqdm progress bar postfix (metrics) safely.
+        Get the average number of tokens used in responses.
 
-        :param pbar: The tqdm progress bar instance.
-        :param data: A dictionary of metric names and values.
+        :return: The average number of tokens used in responses.
+        :rtype: int
         '''
-        with self.tqdm_lock:
-            pbar.set_postfix(data)
+        if not self.token_usage_log:
+            return self.AVERAGE_TOKEN_USAGE
+        
+        completion_tokens = [c for _, _, c in self.token_usage_log]
+        return int(sum(completion_tokens) / len(completion_tokens))
+    
+    def _enforce_rate_limits(self, estimated_tokens: int,
+                             pbar: tqdm = None) -> None:
+        '''
+        Enforce rate limits for the OpenAI API.
+        This method ensures that the number of requests and tokens used
+        per minute does not exceed the specified limits.
+
+        :param estimated_tokens: The estimated tokens in the prompt.
+        :type estimated_tokens: int
+
+        :param pbar: The tqdm progress bar.
+        :type pbar: tqdm
+
+        :return: None
+        '''
+        # wait for rate limit slot
+        while True:
+            wait_time = 0
+            with self.rate_limit_lock, self.token_lock:
+                now = time.time()
+
+                # timestamps and tokens used
+                self.request_timestamps[:] = [
+                    t for t in self.request_timestamps if now - t < 60.0
+                ]
+                self.token_usage_log[:] = [
+                    (t, p, c) for t, p, c in self.token_usage_log if now - t < 60.0
+                ]
+
+                if len(self.request_timestamps) >= self.max_requests_per_min:
+                    if self.request_timestamps:
+                        oldest_request_time = self.request_timestamps[0]
+                        request_wait = 60.0 - (now - oldest_request_time)
+                    else:
+                        request_wait = 1.0
+                    wait_time = max(wait_time, request_wait)
+                
+                tokens_used = sum(p + c for _, p, c in self.token_usage_log)
+
+                # update progress bar
+                self._update_tqdm_postfix(pbar, {'Tokens used/60s': tokens_used})
+
+                # response buffer
+                response_buffer = self._get_average_completion_tokens()
+                agg_tokens = tokens_used + estimated_tokens + response_buffer
+                if agg_tokens > self.max_tokens_per_min:
+                    if self.token_usage_log:
+                        oldest_token_time = self.token_usage_log[0][0]
+                        token_wait = 60.0 - (now - oldest_token_time)
+                    else:
+                        token_wait = 1.0
+                    wait_time = max(wait_time, token_wait)
+                
+                if wait_time == 0:
+                    # no enforced wait time
+                    now = time.time()
+                    self.request_timestamps.append(now)
+
+                    # add jitter to avoid thread pileup
+                    jitter = self.DEFAULT_JITTER + random.uniform(0, 0.05)
+                    self.stop_flag.wait(jitter)
+                    break
+
+            # wait_time != 0 - enforced rate-limit sleep - when over RPM/TPM
+            jittered_wait = wait_time + random.uniform(0.05, 0.25)
+            self._update_tqdm_description(
+                pbar,
+                f'[WAITING] Sleeping {jittered_wait:.2f}s (RPM/TPM limit)'
+            )
+
+            self.stop_flag.wait(jittered_wait)
     
     def _signal_handler(self, sig, frame) -> None:
         '''
