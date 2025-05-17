@@ -45,9 +45,17 @@ def create_claim_analysis_parser(subparsers: ArgumentParser) -> ArgumentParser:
     claim_analysis_arguments.add_argument(
         '--model',
         type=str,
+        choices=[
+            'text-embedding-3-small', 'text-embedding-3-large',
+            'text-embedding-ada-002', 'text-embedding-004'
+        ],
         default='text-embedding-3-small',
         metavar='',
-        help='Embedding model to use for claim analysis'
+        help=(
+            "Embedding model to use for claim analysis. Available options: "
+            "OpenAI 'text-embedding-3-small', 'text-embedding-3-large', "
+            "'text-embedding-ada-002', and Gemini 'text-embedding-004'"
+        )
     )
 
     claim_analysis_arguments.add_argument(

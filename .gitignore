@@ -10,3 +10,6 @@ __pycache__/
 # ignore local datasets and logs
 logs/
 datasets/
+
+# test files
+main-test.py

@@ -58,5 +58,12 @@
             "rpm": 30,
             "tpm": 6000
         }
+    },
+    "openai_moderation": {
+        "omni-moderation-latest": {
+            "rpm": 500,
+            "rpd": 10000,
+            "tpm": 10000
+        }
     }
 }

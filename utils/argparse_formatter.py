@@ -5,6 +5,7 @@ import textwrap
 
 # argparse formatter
 from argparse import RawDescriptionHelpFormatter
+from argparse import _SubParsersAction
 
 class CustomHelpFormatter(RawDescriptionHelpFormatter):
     '''
@@ -17,7 +18,7 @@ class CustomHelpFormatter(RawDescriptionHelpFormatter):
         super().__init__(prog, indent_increment, max_help_position, width)
     
     def _format_action(self, action):
-        if action.choices:
+        if isinstance(action, _SubParsersAction):
             # get the subaction help strings
             subactions = list(action._get_subactions())
 

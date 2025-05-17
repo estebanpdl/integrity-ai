@@ -53,6 +53,7 @@ def create_blueprint_parser(subparsers: ArgumentParser) -> ArgumentParser:
     blueprint_arguments.add_argument(
         '--language',
         type=str,
+        choices=['en', 'es'],
         default='en',
         metavar='',
         help=(

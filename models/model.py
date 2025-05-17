@@ -33,7 +33,7 @@ class LanguageModel(ABC):
     DEFAULT_JITTER = 0.15
 
     # output parameters
-    TEMPERATURE = 1
+    TEMPERATURE = 0.5
 
     def __init__(self, provider: str, model_name: str):
         '''
@@ -59,7 +59,7 @@ class LanguageModel(ABC):
         self.token_lock = threading.Lock()
         self.tqdm_lock = threading.Lock()
 
-        # share controls for rate limiting
+        # shared controls for rate limiting
         self.request_timestamps = []
         self.last_request_time = [0.0]
         self.token_usage_log = []
@@ -193,6 +193,8 @@ class LanguageModel(ABC):
 
                 # response buffer
                 response_buffer = self._get_average_completion_tokens()
+
+                # aggregate tokens -> tokens already used + (estimated tokens in next prompt) + (avg tokens in responses)
                 agg_tokens = tokens_used + estimated_tokens + response_buffer
                 if agg_tokens > self.max_tokens_per_min:
                     if self.token_usage_log:
