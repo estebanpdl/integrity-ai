@@ -10,6 +10,12 @@ from narrative_blueprint import NarrativeBlueprint
 def handle_blueprint(args: dict) -> None:
     '''
     Handle the blueprint command.
+
+    :param args: The arguments to be passed to the blueprint command.
+    :type args: dict
+
+    :return: None
+    :rtype: None
     '''
     model = args['model']
 

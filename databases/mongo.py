@@ -83,3 +83,14 @@ class MongoDBManager(Database):
         ]
         
         return uuids
+    
+    def upload_test_case(self,
+                         test_case: dict,
+                         db_name: str,
+                         collection_name: str) -> None:
+        '''
+        Uploads a test case to the MongoDB collection.
+        '''
+        db = self.client[db_name]
+        collection = db[collection_name]
+        collection.insert_one(test_case)

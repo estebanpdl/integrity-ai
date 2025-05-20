@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# import modules
-import pandas as pd
-
 # embeddings
 from embeddings import OpenAIEmbeddingModel, GemeniEmbeddingModel
 
@@ -13,6 +10,12 @@ from analysis import ClaimAnalysis
 def handle_claim_analysis(args: dict) -> None:
     '''
     Handle the claim analysis command.
+
+    :param args: The arguments to be passed to the claim analysis command.
+    :type args: dict
+
+    :return: None
+    :rtype: None
     '''
     embedding_model_map = {
         'text-embedding-004': 'Gemini',

@@ -163,15 +163,15 @@ class NarrativeBlueprint:
             self.mongo_collection_name
         )
     
-    def _compose_blueprint_messages(self) -> list:
+    def _compose_blueprint_messages(self) -> tuple:
         '''
         Prepare the messages for the LLM.
 
         Each message is a list of role-based dictionaries containing the system
         prompt and the narrative-specific user prompt.
 
-        :return: A list of message lists ready for LLM input.
-        :rtype: List[List[Dict[str, str]]]
+        :return: A tuple of uuids and messages lists ready for LLM input.
+        :rtype: tuple
         '''
         lang = self.args.get('language', 'en')
         system_prompt = self._load_system_prompt(language=lang)

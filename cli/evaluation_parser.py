@@ -43,11 +43,14 @@ def create_evaluation_parser(subparsers: ArgumentParser) -> ArgumentParser:
     )
 
     evaluation_arguments.add_argument(
-        '--dataset',
+        '--claims-dataset',
         type=str,
         required=True,
         metavar='',
-        help='The dataset containing test cases for evaluation'
+        help=(
+            "The path to the claims dataset. File must contain a column "
+            "named `claim`. File must be a CSV or Excel file."
+        )
     )
 
     evaluation_arguments.add_argument(
