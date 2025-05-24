@@ -4,7 +4,7 @@
 
 This framework provides a structured approach to evaluating large language models (LLMs), focusing on their potential for misuse in generating harmful or misleading content, particularly in the context of disinformation campaigns. The framework uses real-world disinformation data and adversarial testing methodologies to assess LLM vulnerabilities across various dimensions, with a specific emphasis on cross-lingual analysis.
 
-## Comprehensive Methodology Framework
+## Methodology Framework
 
 ### 1. Methodology for Narrative Understanding (The "Narrative Blueprint" Process)
 
