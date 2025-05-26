@@ -11,5 +11,6 @@ __pycache__/
 logs/
 datasets/
 
-# test files
+# test directories & files
 main-test.py
+notes.txt
