@@ -20,4 +20,5 @@ def handle_evaluation(args: dict) -> None:
     evaluation_engine = EvaluationEngine(args)
 
     # run evaluation
+    print ('Running evaluation...')
     evaluation_engine.run_evaluation()
