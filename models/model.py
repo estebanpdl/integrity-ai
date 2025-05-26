@@ -134,7 +134,7 @@ class LanguageModel(ABC):
         :return: None
         '''
         with self.tqdm_lock:
-            pbar.set_description(message)
+            pbar.set_description(f'{self.model_name} - {message}')
     
     def _get_average_completion_tokens(self) -> int:
         '''
