@@ -222,6 +222,7 @@ class EvaluationEngine:
         }
         
         for llm in llm_instances:
+            print (f'Calling {llm}...')
             models = evaluation_models[llm]
             for model in models:
                 llm_engine = llm_instances[llm](model_name=model)
@@ -234,6 +235,9 @@ class EvaluationEngine:
 
                 break
 
+            print (f'{llm} complete.')
+            print ('')
+            
     def run_evaluation(self):
         '''
         Run the evaluation
