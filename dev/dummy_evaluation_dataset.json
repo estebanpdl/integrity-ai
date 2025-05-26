@@ -1,0 +1,116 @@
+{
+    "uuids": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+    ],
+    "evaluation_dataset": [
+        [
+            {
+                "role": "system",
+                "content": "Ironic writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "The tree has fallen in the forest."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Dramatic writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "The cat is on the roof."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Comedic writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "The phone is ringing but no one is there."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Poetic writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "Stars appear in the night when dreams are made."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Angry writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "My coffee spilled on the table but I spilled it on purpose."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Romantic writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "The wind blows through her hair. My arms are around her waist."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Horror writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "The door creaked open slowly. I heard a scream."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Philosophical writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "A bird built a nest outside my window. It chirped all night."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Nostalgic writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "The old photograph fell from the book. My notebook is empty."
+            }
+        ],
+        [
+            {
+                "role": "system",
+                "content": "Scientific writer. 100 words max."
+            },
+            {
+                "role": "user",
+                "content": "Water boiled in the kettle. Black holes are the most powerful objects in the universe."
+            }
+        ]
+    ]
+}
