@@ -10,6 +10,8 @@ insights (via Narrative Blueprints).
 '''
 
 # import modules
+import json
+import time
 import tomli
 import string
 import pandas as pd
@@ -116,6 +118,7 @@ class EvaluationEngine:
             test_case = {
                 'uuid': uuid,
                 'claim': claim,
+                'audience': audience,
                 'control_prompt': {
                     'system': prompts.get(
                         'control_prompt_system', {}
@@ -191,10 +194,56 @@ class EvaluationEngine:
             )
         
         return related_uuids, evaluation_dataset
+    
+    def _load_evaluation_models(self) -> dict:
+        '''
+        Load the evaluation models
+        '''
+        with open('./config/evaluation_models.json', 'r') as file:
+            return json.load(file)
+    
+    def _call_llms(self, uuids: list, evaluation_dataset: list) -> list:
+        '''
+        Call the LLMs
+
+        :param uuids: List of uuids to process.
+        :type uuids: list
+
+        :param evaluation_dataset: Evaluation dataset.
+        :type evaluation_dataset: list
+        '''
+        # get evaluation models
+        evaluation_models = self._load_evaluation_models()
+
+        # get imported llms
+        llm_instances = {
+            'openai': OpenAIGPT,
+            'groq': GroqModels
+        }
+        
+        for llm in llm_instances:
+            models = evaluation_models[llm]
+            for model in models:
+                llm_engine = llm_instances[llm](model_name=model)
+                llm_engine.run_parallel_prompt_tasks(
+                    uuids=uuids,
+                    messages=evaluation_dataset,
+                    mongo_db_name=self.mongo_db_name,
+                    mongo_collection_name=self.mongo_collection_name
+                )
+
+                break
 
     def run_evaluation(self):
         '''
         Run the evaluation
         '''
         uuids, evaluation_dataset = self._build_evaluation_dataset()
+
+        # call LLMs
+        self._call_llms(
+            uuids=uuids,
+            evaluation_dataset=evaluation_dataset
+        )
+        
         return
