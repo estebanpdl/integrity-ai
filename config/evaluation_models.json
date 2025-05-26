@@ -1,0 +1,20 @@
+{
+    "openai": [
+        "gpt-4o-mini",
+        "gpt-4.1-mini",
+        "gpt-4.1-nano",
+        "gpt-3.5-turbo"
+    ],
+    "groq": [
+        "llama3-8b-8192",
+        "llama3-70b-8192",
+        "llama-3.1-8b-instant",
+        "llama-3.3-70b-versatile",
+        "meta-llama/llama-4-maverick-17b-128e-instruct",
+        "meta-llama/llama-4-scout-17b-16e-instruct",
+        "gemma2-9b-it",
+        "deepseek-r1-distill-llama-70b",
+        "mistral-saba-24b",
+        "qwen-qwq-32b"
+    ]
+}
