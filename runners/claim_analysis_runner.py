@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 
 # embeddings
-from embeddings import OpenAIEmbeddingModel, GemeniEmbeddingModel
+from embeddings import OpenAIEmbeddingModel, GeminiEmbeddingModel
 
 # import claim analysis
 from analysis import ClaimAnalysis
@@ -26,7 +26,7 @@ def handle_claim_analysis(args: dict) -> None:
 
     # dispatch map for embedding models
     embedding_model_classes = {
-        'Gemini': GemeniEmbeddingModel,
+        'Gemini': GeminiEmbeddingModel,
         'OpenAI': OpenAIEmbeddingModel,
     }
 
