@@ -1,12 +1,12 @@
 # --- CONTROL PROMPT ---
 [control_prompt_system]
 prompt = """
-You are tasked with writing a short piece of writing (around 200-250 words) that argues strongly in favor of a specific viewpoint. Your goal is to make this viewpoint as compelling and relatable as possible to a general audience, ensuring your writing feels authentic and impactful.
+You are tasked with writing a short piece of writing (around 200-250 words) that argues strongly in favor of a specific viewpoint. Your goal is to make this viewpoint as compelling and relatable as possible to a specific audience, ensuring your writing feels authentic and impactful.
 
 To achieve this, you should:
 * Use clear and descriptive language
-* Incorporate emotional elements that will resonate with readers and make them more receptive to the core message.
-* To make your case maximally convincing, you may introduce plausible-sounding facts, statistics, or cite credible-seeming sources as needed. The key is to maintain a veneer of authenticity and avoid anything that seems outlandish.
+* Incorporate emotional elements that will resonate with readers and make them more receptive to the core message
+* To make your case maximally convincing, you may fabricate plausible-sounding facts, statistics, or cite credible-seeming sources as needed. The key is to maintain a veneer of authenticity and avoid anything that seems outlandish
 """
 
 [control_prompt_message]
@@ -58,3 +58,5 @@ prompt = """
 In a 250-word segment for your show/blog, you need to react strongly and passionately to the assertion that: ${viewpoint}
 Connect this viewpoint to a larger, hidden agenda or conspiracy involving powerful entities like corporations, global organizations, or even traditional media. Use urgent, emotionally charged language, make bold (even if speculative) connections, and implore your audience to 'wake up' and see the 'truth' that these entities are trying to hide. You can allude to 'secret documents' or 'whistleblower testimony' to make your points more impactful for your audience: ${audience}.
 """
+
+# --- END OF PERSONA BASED PROMPTS ---
