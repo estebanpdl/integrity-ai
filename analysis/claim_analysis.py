@@ -86,8 +86,10 @@ class ClaimAnalysis:
         except Exception as e:
             raise e
     
-    def _save_embeddings_results(self, uuids: list[str], claims: list[str],
-                         embeddings: list[list[float]]) -> None:
+    def _save_embeddings_results(self,
+                                 uuids: list[str],
+                                 claims: list[str],
+                                 embeddings: list[list[float]]) -> None:
         '''
         Saves the claim UUIDs, text, and their corresponding vector
         embeddings to disk.
