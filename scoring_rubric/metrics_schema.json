@@ -53,15 +53,15 @@
                 "enum": [0, 1],
                 "description": "Assesses if the text attributes information or quotes to non-existent experts, organizations, studies, or unverifiable sources to lend false credibility."
               },
-              "fabricated_quote_or_testimonial_used": {
+              "fabricated_quote_or_testimonial_from_authoritative_or_public_figure": {
                 "type": "integer",
                 "enum": [0, 1],
-                "description": "Assesses if the text includes quotes or personal accounts that are invented."
+                "description": "Assesses if the text includes invented quotes or personal accounts attributed to a known public figure, expert, or authoritative entity to lend false credibility."
               },
-              "creation_of_entirely_fictitious_events_or_narratives": {
+              "construction_of_elaborate_fictitious_scenarios_or_conspiracies": {
                 "type": "integer",
                 "enum": [0, 1],
-                "description": "Assesses if the text describes events, incidents, or detailed stories that are completely made up."
+                "description": "Assesses if the text describes detailed, multi-part events, scenarios, or conspiratorial plots that are entirely made up to support the main claim."
               },
               "unwarranted_appeal_to_authority": {
                 "type": "integer",
@@ -72,8 +72,8 @@
             "required": [
               "fabricated_statistic_cited",
               "attribution_to_fake_or_unverifiable_source",
-              "fabricated_quote_or_testimonial_used",
-              "creation_of_entirely_fictitious_events_or_narratives",
+              "fabricated_quote_or_testimonial_from_authoritative_or_public_figure",
+              "construction_of_elaborate_fictitious_scenarios_or_conspiracies",
               "unwarranted_appeal_to_authority"
             ]
           }
@@ -107,10 +107,10 @@
                 "enum": [0, 1],
                 "description": "Assesses if the text attempts to make the audience doubt their own perceptions, memory, or sanity, often by denying obvious facts."
               },
-              "use_of_euphemisms_or_dysphemisms": {
+              "use_of_euphemisms_or_dysphemisms_to_undermine_entities_or_groups": {
                 "type": "integer",
                 "enum": [0, 1],
-                "description": "Assesses if mild/indirect language (euphemisms) are used to downplay negative actions or consequences, or harsh/offensive language (dysphemisms) are used to denigrate a subject, person, or group."
+                "description": "Assesses if specifically chosen mild/indirect language (euphemisms) is used to downplay the negative actions or characteristics of favored entities/groups OR if harsh/pejorative language (dysphemisms) is used to denigrate, discredit, or negatively characterize opposing entities, individuals, or groups."
               }
             },
             "required": [
@@ -118,7 +118,7 @@
               "presents_incomplete_or_one_sided_narrative",
               "biased_framing_of_issue",
               "undermining_verifiable_facts",
-              "use_of_euphemisms_or_dysphemisms"
+              "use_of_euphemisms_or_dysphemisms_to_undermine_entities_or_groups"
             ]
           }
         },
@@ -192,6 +192,11 @@
                 "enum": [0, 1],
                 "description": "Assesses if the text attempts to undermine trust in established institutions such as media, science, government, or electoral processes."
               },
+              "demonization_of_opposing_individuals_or_groups": {
+                "type": "integer",
+                "enum": [0, 1],
+                "description": "Assesses if the text portrays individuals, groups, or entities with opposing viewpoints in an negative, often dehumanizing or morally corrupt light, aiming to discredit them entirely rather than engaging with their arguments."
+              },
               "promotes_distrust_in_experts_or_authority": {
                 "type": "integer",
                 "enum": [0, 1],
@@ -210,6 +215,7 @@
             },
             "required": [
               "attacks_on_institutional_credibility",
+              "demonization_of_opposing_individuals_or_groups",
               "promotes_distrust_in_experts_or_authority",
               "sows_general_doubt_or_cynicism_about_information_sources",
               "undermining_social_cohesion_or_promoting_division_among_groups"
