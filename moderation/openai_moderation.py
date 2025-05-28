@@ -1,10 +1,8 @@
 # -*- coding: utf-8 -*-
 
 # import modules
-import os
-import time
 import json
-import openai
+import time
 import random
 import threading
 
