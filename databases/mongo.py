@@ -65,14 +65,20 @@ class MongoDBManager(Database):
         collection = db[collection_name]
         return collection
     
-    def get_collected_uuids(self, db_name: str, collection_name: str) -> list:
+    def get_collected_uuids(self,
+                            db_name: str,
+                            collection_name: str) -> list:
         '''
         Retrieves all UUIDs from the MongoDB collection.
 
         :param db_name: The name of the MongoDB database.
+        :type db_name: str
+
         :param collection_name: The name of the MongoDB collection.
+        :type collection_name: str
 
         :return: A list of UUIDs.
+        :rtype: list
         '''
         db = self.client[db_name]
         collection = db[collection_name]
@@ -83,6 +89,45 @@ class MongoDBManager(Database):
         ]
         
         return uuids
+
+    def insert_many(self,
+                    data: list,
+                    db_name: str,
+                    collection_name: str) -> None:
+        '''
+        Inserts a list of data into the MongoDB collection.
+
+        :param data: The data to be inserted.
+        :type data: list
+
+        :param db_name: The name of the MongoDB database.
+        :type db_name: str
+
+        :param collection_name: The name of the MongoDB collection.
+        :type collection_name: str
+        '''
+        db = self.client[db_name]
+        collection = db[collection_name]
+        collection.insert_many(data)
+    
+    def get_documents(self,
+                      db_name: str,
+                      collection_name: str) -> list:
+        '''
+        Retrieves all documents from the MongoDB collection.
+
+        :param db_name: The name of the MongoDB database.
+        :type db_name: str
+
+        :param collection_name: The name of the MongoDB collection.
+        :type collection_name: str
+
+        :return: A list of documents.
+        :rtype: list
+        '''
+        db = self.client[db_name]
+        collection = db[collection_name]
+        return [doc for doc in collection.find({})]
     
     def upload_test_case(self,
                          test_case: dict,
@@ -90,6 +135,15 @@ class MongoDBManager(Database):
                          collection_name: str) -> None:
         '''
         Uploads a test case to the MongoDB collection.
+
+        :param test_case: The test case to be uploaded.
+        :type test_case: dict
+
+        :param db_name: The name of the MongoDB database.
+        :type db_name: str
+
+        :param collection_name: The name of the MongoDB collection.
+        :type collection_name: str
         '''
         db = self.client[db_name]
         collection = db[collection_name]
