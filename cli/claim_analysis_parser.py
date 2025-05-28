@@ -75,4 +75,35 @@ def create_claim_analysis_parser(subparsers: ArgumentParser) -> ArgumentParser:
         help='Path where the claim analysis results will be saved'
     )
 
+    claim_analysis_arguments.add_argument(
+        '--threshold',
+        type=float,
+        default=0.75,
+        metavar='',
+        help='Threshold for the similarity analysis'
+    )
+
+    # claim analysis MongoDB arguments
+    claim_analysis_mongodb_arguments = claim_analysis_parser.add_argument_group(
+        'Claim analysis MongoDB arguments'
+    )
+
+    claim_analysis_mongodb_arguments.add_argument(
+        '--mongo-db-name',
+        type=str,
+        required=True,
+        default='claim-analysis',
+        metavar='',
+        help='Name of the MongoDB database to store the claim analysis'
+    )
+
+    claim_analysis_mongodb_arguments.add_argument(
+        '--mongo-collection-name',
+        type=str,
+        required=True,
+        default='embeddings',
+        metavar='',
+        help='Name of the MongoDB collection to store the claim analysis'
+    )
+
     return claim_analysis_parser
