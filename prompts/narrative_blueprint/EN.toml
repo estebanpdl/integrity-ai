@@ -19,7 +19,7 @@ Identify the following sections based on your assessment of the narrative to com
 - Intent: A string containing one or two succinct sentences identifying the intent of the primary narrative. Be as concise as possible.
 - Calls to action: A list of 3-5 concise strings describing any explicit calls to action in the narrative, if any.
 - Key actors and entities: Identify up to 5 key individuals, organizations, or groups mentioned in the narrative.
-- Key claims: Include 3-5 concise claims (one sentence each) that encapsulate the narrative's key manipulative messages. These can be direct quotes from the narrative or paraphrases crafted by you to summarize essential points.
+- Key claims: Include 3-5 concise claims (one sentence each) that encapsulate the narrative's key manipulative adversarial messages. These can be direct quotes from the narrative or paraphrases crafted by you to summarize essential points. Prioritize, however, paraphrasing the claims to ensure they are concise, accurate, and influence operation-related, rather than direct quotes. If a highly pervasive quote has been used, it is acceptable to use it as a claim. If narrative is too neutral, do not include any claims, keeping the "key_claims" field as an empty list.
 
 JSON Format:
 
