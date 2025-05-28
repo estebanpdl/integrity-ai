@@ -16,6 +16,9 @@ from .base import VectorModel
 # OpenAI related modules
 from openai import OpenAI, RateLimitError
 
+# MongoDB connection
+from databases import MongoDBManager
+
 # Embedding Model class
 class OpenAIEmbeddingModel(VectorModel):
     '''
@@ -71,6 +74,9 @@ class OpenAIEmbeddingModel(VectorModel):
 
         # model token encoding
         self.encoding = tiktoken.get_encoding(self.ENCODING)
+
+        # MongoDB connection
+        self.mongodb_manager = MongoDBManager()
     
     def estimate_tokens(self, text: str) -> int:
         '''
@@ -85,14 +91,50 @@ class OpenAIEmbeddingModel(VectorModel):
         # estimate tokens
         return len(self.encoding.encode(text))
     
-    def _safe_embed_request(self, batch: list[str],
-                            request_id: int,
+    def _insert_into_mongodb(self,
+                             data: list[dict] = None,
+                             mongo_db_name: str = None,
+                             mongo_collection_name: str = None) -> None:
+        '''
+        Insert data into MongoDB.
+
+        :param data: The data to be inserted.
+        :type data: list[dict]
+
+        :param mongo_db_name: The name of the MongoDB database.
+        :type mongo_db_name: str
+
+        :param mongo_collection_name: The name of the MongoDB collection.
+        :type mongo_collection_name: str
+        '''
+        # insert into MongoDB
+        self.mongodb_manager.insert_many(
+            db_name=mongo_db_name,
+            collection_name=mongo_collection_name,
+            data=data
+        )
+    
+    def _safe_embed_request(self,
+                            uuids: list = None,
+                            batch_data: list[str] = None,
+                            mongo_db_name: str = None,
+                            mongo_collection_name: str = None,
+                            request_id: int = None,
                             retry_max: int = 3) -> list[list[float]]:
         '''
         Safe embedding request.
 
-        :param batch: The batch of text to be embedded.
-        :type batch: list[str]
+        :param uuids: The uuids of the documents to be embedded.
+        :type uuids: list
+
+        :param batch_data: The batch of text to be embedded.
+        :type batch_data: list[str]
+
+        :param mongo_db_name: The name of the MongoDB database.
+        :type mongo_db_name: str
+
+        :param mongo_collection_name: The name of the MongoDB collection.
+        :type mongo_collection_name: str
 
         :param request_id: The request ID.
         :type request_id: int
@@ -108,10 +150,29 @@ class OpenAIEmbeddingModel(VectorModel):
             try:
                 response = self.client.embeddings.create(
                     model=self.model_name,
-                    input=batch
+                    input=batch_data
                 )
 
-                return [i.embedding for i in response.data]
+                # build data object
+                data = [
+                    {
+                        'uuid': uuids[i],
+                        'text': batch_data[i],
+                        'embedding': response.data[i].embedding,
+                        'model_name': self.model_name,
+                        'provider': 'OpenAI'
+                    }
+                    for i in range(len(uuids))
+                ]
+
+                # insert into MongoDB
+                self._insert_into_mongodb(
+                    data=data,
+                    mongo_db_name=mongo_db_name,
+                    mongo_collection_name=mongo_collection_name
+                )
+
+                return
             except RateLimitError as e:
                 retry_count += 1
                 wait_time = 60
@@ -122,13 +183,17 @@ class OpenAIEmbeddingModel(VectorModel):
             self._log_write(f'Failed to compute embeddings for request {request_id}')
             raise RuntimeError('Failed to compute embeddings.')
 
-    def _process_batch(self, batch_data: list[str],
+    def _process_batch(self,
+                       uuids: list = None,
+                       batch_data: list[str] = None,
+                       mongo_db_name: str = None,
+                       mongo_collection_name: str = None,
                        rpm_start_time=None,
                        tpm_start_time=None,
                        request_count=0,
                        pbar=None,
                        start_request_id=1,
-                       global_token_count: int = 0) -> tuple[list[list[float]], float, float, int, int, int]:
+                       global_token_count: int = 0) -> tuple[float, float, int, int, int]:
         '''
         Process a batch of documents.
         
@@ -155,10 +220,8 @@ class OpenAIEmbeddingModel(VectorModel):
 
         :return: Tuple of (embeddings, rpm_start_time, tpm_start_time,
             request_count, next_request_id, global_token_count)
-        :rtype: tuple[list[list[float]], float, float, int, int, int]
+        :rtype: tuple[float, float, int, int, int]
         '''
-        # store embeddings
-        batch_embeddings = []
         current_batch = []
 
         # token count
@@ -177,8 +240,12 @@ class OpenAIEmbeddingModel(VectorModel):
                 token_count + text_tokens > self.MAX_TOKENS_PER_REQUEST
             ):
                 # compute embeddings
-                batch_embeddings.extend(
-                    self._safe_embed_request(current_batch, request_id)
+                self._safe_embed_request(
+                    uuids=uuids,
+                    batch_data=current_batch,
+                    mongo_db_name=mongo_db_name,
+                    mongo_collection_name=mongo_collection_name,
+                    request_id=request_id
                 )
                 
                 # update progress bar for processed batch
@@ -223,8 +290,12 @@ class OpenAIEmbeddingModel(VectorModel):
         # compute embeddings for current batch
         if current_batch:
             # compute embeddings
-            batch_embeddings.extend(
-                self._safe_embed_request(current_batch, request_id)
+            self._safe_embed_request(
+                uuids=uuids,
+                batch_data=current_batch,
+                mongo_db_name=mongo_db_name,
+                mongo_collection_name=mongo_collection_name,
+                request_id=request_id
             )
 
             # update progress bar
@@ -233,11 +304,15 @@ class OpenAIEmbeddingModel(VectorModel):
             # increment request processes
             request_count += 1
             request_id += 1
-            
-        return batch_embeddings, rpm_start_time, tpm_start_time, \
+        
+        return rpm_start_time, tpm_start_time, \
             request_count, request_id, global_token_count
     
-    def compute_embeddings(self, data: list[str]) -> list[list[float]]:
+    def compute_embeddings(self,
+                           uuids: list = None,
+                           data: list[str] = None,
+                           mongo_db_name: str = None,
+                           mongo_collection_name: str = None) -> list[list[float]]:
         '''
         Compute the embeddings for the data.
 
@@ -247,8 +322,6 @@ class OpenAIEmbeddingModel(VectorModel):
         :return: The computed embeddings.
         :rtype: list[list[float]]
         '''
-        all_embeddings = []
-        
         # initialize rate limiting trackers
         rpm_start_time = time.time()
         tpm_start_time = time.time()
@@ -262,10 +335,16 @@ class OpenAIEmbeddingModel(VectorModel):
             for batch_start in range(0, len(data), self.DOCS_PER_BATCH):
                 batch_end = min(batch_start + self.DOCS_PER_BATCH, len(data))
                 batch_data = data[batch_start:batch_end]
+
+                # uuids
+                batch_uuids = uuids[batch_start:batch_end]
                 
                 # process batch
                 result = self._process_batch(
-                    batch_data, 
+                    uuids=batch_uuids,
+                    batch_data=batch_data,
+                    mongo_db_name=mongo_db_name,
+                    mongo_collection_name=mongo_collection_name,
                     rpm_start_time=rpm_start_time,
                     tpm_start_time=tpm_start_time,
                     request_count=request_count,
@@ -273,11 +352,8 @@ class OpenAIEmbeddingModel(VectorModel):
                     start_request_id=next_request_id,
                     global_token_count=global_token_count
                 )
-                
-                batch_embeddings, rpm_start_time, tpm_start_time, \
+
+                rpm_start_time, tpm_start_time, \
                     request_count, next_request_id, global_token_count = result
-                
-                # update embeddings
-                all_embeddings.extend(batch_embeddings)
         
-        return all_embeddings
+        return
