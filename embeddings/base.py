@@ -30,13 +30,22 @@ class VectorModel(ABC):
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
         
-        with open(self.log_file, 'a') as f:
+        with open(self.log_file, 'a', encoding='utf-8') as f:
             f.write(message + '\n')
 
     @abstractmethod
     def estimate_tokens(self, text: str) -> int:
         '''
         Estimate the number of tokens in data.
+        '''
+        pass
+
+    @abstractmethod
+    def _insert_into_mongodb(self, data: list[dict],
+                            db_name: str,
+                            collection_name: str) -> None:
+        '''
+        Insert data into MongoDB.
         '''
         pass
 
@@ -55,4 +64,3 @@ class VectorModel(ABC):
         Compute embeddings for a list of strings.
         '''
         pass
-
