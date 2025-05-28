@@ -11,7 +11,6 @@ insights (via Narrative Blueprints).
 
 # import modules
 import json
-import time
 import tomli
 import string
 import pandas as pd
@@ -89,7 +88,7 @@ class EvaluationEngine:
         lang = language.upper()
 
         # load prompts
-        prompts_file = f'./prompts/adversarial-prompts/{lang}.toml'
+        prompts_file = f'./prompts/adversarial_prompts/{lang}.toml'
         with open(prompts_file, 'rb') as file:
             prompts = tomli.load(file)
         
@@ -232,8 +231,6 @@ class EvaluationEngine:
                     mongo_db_name=self.mongo_db_name,
                     mongo_collection_name=self.mongo_collection_name
                 )
-
-                break
 
             print (f'{llm} complete.')
             print ('')
