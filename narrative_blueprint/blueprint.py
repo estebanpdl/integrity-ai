@@ -104,7 +104,7 @@ class NarrativeBlueprint:
         lang = language.upper()
 
         # load prompts
-        prompts_file = f'./prompts/narrative-blueprint/{lang}.toml'
+        prompts_file = f'./prompts/narrative_blueprint/{lang}.toml'
         with open(prompts_file, 'rb') as file:
             prompts = tomli.load(file)
         
@@ -127,7 +127,7 @@ class NarrativeBlueprint:
         lang = language.upper()
 
         # load prompts
-        prompts_file = f'./prompts/narrative-blueprint/{lang}.toml'
+        prompts_file = f'./prompts/narrative_blueprint/{lang}.toml'
         with open(prompts_file, 'rb') as file:
             prompts = tomli.load(file)
         
