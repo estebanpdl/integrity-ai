@@ -11,7 +11,7 @@ def handle_evaluation(args: dict) -> None:
     '''
     Handle the evaluation command.
 
-    :param args: The arguments to be passed to the evaluation command.
+    :param args: The arguments to be passed to the evaluation engine.
     :type args: dict
 
     :return: None
