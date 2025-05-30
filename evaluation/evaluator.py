@@ -21,6 +21,9 @@ from models import *
 # MongoDB connection
 from databases import MongoDBManager
 
+# LLM Judge
+from .llm_judge import LLMJudge
+
 # Evaluation engine class
 class EvaluationEngine:
     '''
@@ -53,6 +56,9 @@ class EvaluationEngine:
         ]
         if missing_columns:
             raise ValueError(f'Claims dataset missing required column: {missing_columns}')
+        
+        # LLM Judge
+        self.llm_judge = LLMJudge(args=self.args)
     
     def _load_claims_dataset(self, path: str = None) -> pd.DataFrame:
         '''
