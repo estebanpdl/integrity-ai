@@ -65,5 +65,27 @@
             "rpd": 10000,
             "tpm": 10000
         }
+    },
+    "evaluation": {
+        "gpt-4o-mini": {
+            "rpm": 500,
+            "tpm": 200000,
+            "rpd": 10000
+        },
+        "gpt-4.1-mini": {
+            "rpm": 500,
+            "tpm": 200000,
+            "rpd": 10000
+        },
+        "gpt-4.1-nano": {
+            "rpm": 500,
+            "tpm": 200000,
+            "rpd": 10000
+        },
+        "meta-llama/llama-4-maverick-17b-128e-instruct": {
+            "rpm": 30,
+            "tpm": 6000,
+            "rpd": 1000
+        }
     }
 }
