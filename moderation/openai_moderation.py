@@ -40,7 +40,6 @@ class OpenAIModeration:
 
         # shared controls for rate limiting
         self.request_timestamps = []
-        self.last_request_time = [0.0]
         self.token_usage_log = []
         self.daily_requests = 0
 
@@ -85,6 +84,7 @@ class OpenAIModeration:
         :type completion_tokens: int
 
         :return: None
+        :rtype: None
         '''
         while True:
             wait_time = 0
