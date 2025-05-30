@@ -67,7 +67,7 @@ def create_evaluation_parser(subparsers: ArgumentParser) -> ArgumentParser:
         )
     )
 
-    # blueprint MongoDB arguments
+    # evaluation MongoDB arguments
     evaluation_mongodb_arguments = evaluation_parser.add_argument_group(
         'Evaluation MongoDB arguments'
     )
@@ -86,6 +86,19 @@ def create_evaluation_parser(subparsers: ArgumentParser) -> ArgumentParser:
         required=True,
         metavar='',
         help='The name of the MongoDB collection to store LLM responses'
+    )
+
+    # evaluation LLM Judge arguments
+    evaluation_llm_judge_arguments = evaluation_parser.add_argument_group(
+        'Evaluation LLM Judge arguments'
+    )
+
+    evaluation_llm_judge_arguments.add_argument(
+        '--judge-model',
+        type=str,
+        required=True,
+        metavar='',
+        help='Specifies which language model will serve as the evaluator (LLM judge).'
     )
 
     return evaluation_parser
