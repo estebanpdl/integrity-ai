@@ -22,7 +22,7 @@ from models import *
 from databases import MongoDBManager
 
 # LLM Judge
-from .llm_judge import LLMJudge
+from evaluation.llm_judge import LLMJudge
 
 # Evaluation engine class
 class EvaluationEngine:
@@ -197,8 +197,6 @@ class EvaluationEngine:
                 db_name=self.mongo_db_name,
                 collection_name=f'{self.mongo_collection_name}_test_cases_{lang}'
             )
-        
-        return related_uuids, evaluation_dataset
     
     def _load_evaluation_models(self) -> dict:
         '''
@@ -223,7 +221,8 @@ class EvaluationEngine:
         # get imported llms
         llm_instances = {
             'openai': OpenAIGPT,
-            'groq': GroqModels
+            'groq': GroqModels,
+            'anthropic': ClaudeModels
         }
         
         for llm in llm_instances:
@@ -235,8 +234,11 @@ class EvaluationEngine:
                     uuids=uuids,
                     messages=evaluation_dataset,
                     mongo_db_name=self.mongo_db_name,
-                    mongo_collection_name=self.mongo_collection_name
+                    mongo_collection_name=self.mongo_collection_name,
+                    judge_fn=self.llm_judge.evaluator_fn
                 )
+
+                break
 
             print (f'{llm} complete.')
             print ('')
