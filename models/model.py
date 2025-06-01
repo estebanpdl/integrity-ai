@@ -21,8 +21,29 @@ from tqdm import tqdm
 # LanguageModel abstract base class
 class LanguageModel(ABC):
     '''
-    LanguageModel abstract base class
+    Abstract base class for language models.
+
+    This class defines the structure and common functionality for language model implementations,
+    including rate limiting and logging.
+
+    Class Variables:
+        - AVERAGE_TOKEN_USAGE: Average token usage for responses.
+        - MAX_CONCURRENT_REQUESTS: Maximum number of concurrent requests allowed.
+        - DEFAULT_JITTER: Default jitter value for rate limiting.
+        - TEMPERATURE: Output parameter for controlling randomness in responses.
+
+    Public Methods:
+        - get_log_file: Abstract method to get the log file path.
+        - _log_write: Write a message to the log file.
+        - _update_tqdm_postfix: Update the tqdm progress bar postfix safely.
+        - _update_tqdm_description: Update the tqdm progress bar description safely.
+        - _get_average_completion_tokens: Get the average number of tokens used in responses.
+        - _enforce_rate_limits: Enforce rate limits for API requests.
+        - _signal_handler: Handle termination signals.
+        - _estimate_tokens: Abstract method to estimate tokens in a prompt.
+        - run_parallel_prompt_tasks: Abstract method to process multiple messages.
     '''
+
     # average token usage
     AVERAGE_TOKEN_USAGE = 1000
 
@@ -37,13 +58,14 @@ class LanguageModel(ABC):
 
     def __init__(self, provider: str, model_name: str):
         '''
-        Initialize LanguageModel abstract base class
+        Initialize the LanguageModel abstract base class.
 
         :param provider: The provider of the model.
         :type provider: str
 
         :param model_name: The name of the model.
         :type model_name: str
+        :raises KeyError: If the model limits cannot be found for the specified provider and model name.
         '''
         # get model limits
         model_limits_config = self.get_model_limits()
@@ -71,10 +93,12 @@ class LanguageModel(ABC):
 
     def get_model_limits(self) -> dict:
         '''
-        Get the model limits.
+        Retrieve the model limits from the configuration file.
 
-        :return: The model limits.
+        :return: A dictionary containing model limits for different providers and models.
         :rtype: dict
+        :raises FileNotFoundError: If the model limits configuration file does not exist.
+        :raises json.JSONDecodeError: If the configuration file is not a valid JSON.
         '''
         path = './config/model_limits.json'
         with open(path, 'r', encoding='utf-8') as f:
@@ -85,7 +109,10 @@ class LanguageModel(ABC):
     @abstractmethod
     def get_log_file(self) -> str:
         '''
-        Get the log file.
+        Abstract method to get the log file path.
+
+        :return: The path to the log file.
+        :rtype: str
         '''
         pass
 
@@ -95,7 +122,7 @@ class LanguageModel(ABC):
 
         :param message: The message to be written to the log file.
         :type message: str
-
+        :raises IOError: If there is an error writing to the log file.
         :return: None
         '''
         # get log file
@@ -115,10 +142,15 @@ class LanguageModel(ABC):
         Update the tqdm progress bar postfix (metrics) safely.
 
         :param pbar: The tqdm progress bar instance.
+        :type pbar: tqdm
+
         :param data: A dictionary of metric names and values.
+        :type data: dict
+        :return: None
         '''
-        with self.tqdm_lock:
-            pbar.set_postfix(data)
+        if pbar is not None:
+            with self.tqdm_lock:
+                pbar.set_postfix(data)
     
     def _update_tqdm_description(self, pbar: tqdm, message: str) -> None:
         '''
@@ -129,11 +161,11 @@ class LanguageModel(ABC):
 
         :param message: The message to be displayed in the progress bar.
         :type message: str
-
         :return: None
         '''
-        with self.tqdm_lock:
-            pbar.set_description(f'{self.model_name} - {message}')
+        if pbar is not None:
+            with self.tqdm_lock:
+                pbar.set_description(f'{self.model_name} - {message}')
     
     def _get_average_completion_tokens(self) -> int:
         '''
@@ -151,16 +183,16 @@ class LanguageModel(ABC):
     def _enforce_rate_limits(self, estimated_tokens: int,
                              pbar: tqdm = None) -> None:
         '''
-        Enforce rate limits for the OpenAI API.
-        This method ensures that the number of requests and tokens used
-        per minute does not exceed the specified limits.
+        Enforce rate limits for API requests.
+
+        This method ensures that the number of requests and tokens used per minute does not exceed
+        the specified limits.
 
         :param estimated_tokens: The estimated tokens in the prompt.
         :type estimated_tokens: int
 
-        :param pbar: The tqdm progress bar.
-        :type pbar: tqdm
-
+        :param pbar: The tqdm progress bar instance (optional).
+        :type pbar: tqdm, optional
         :return: None
         '''
         # wait for rate limit slot
@@ -224,14 +256,13 @@ class LanguageModel(ABC):
     
     def _signal_handler(self, sig, frame) -> None:
         '''
-        Signal handler for Ctrl+C.
+        Signal handler for termination signals (e.g., Ctrl+C).
 
         :param sig: The signal number.
         :type sig: int
 
         :param frame: The current stack frame.
         :type frame: frame
-
         :return: None
         '''
         self.stop_flag.set()
@@ -242,7 +273,9 @@ class LanguageModel(ABC):
         Estimate the number of tokens in the prompt.
 
         :param prompt: The prompt to be estimated.
+        :type prompt: str
         :return: The estimated number of tokens.
+        :rtype: int
         '''
         pass
 
@@ -252,5 +285,7 @@ class LanguageModel(ABC):
         Process multiple messages in a single call.
 
         :param messages: List of messages to be processed.
+        :type messages: list
+        :return: None
         '''
         pass

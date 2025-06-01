@@ -7,6 +7,9 @@ import signal
 import random
 import traceback
 
+# typing
+from typing import Callable
+
 # dotenv for environment variables
 from dotenv import load_dotenv
 
@@ -32,13 +35,31 @@ from databases import MongoDBManager
 # Groq class
 class GroqModels(LanguageModel):
     '''
-    GroqModels class
+    GroqModels class for interacting with Groq's API.
+
+    This class provides methods to generate responses using the specified Groq model,
+    manage token usage, and log responses to a MongoDB database.
+
+    Public Methods:
+        - get_log_file: Returns the path to the log file.
+        - _estimate_tokens: Estimates the number of tokens in a given prompt.
+        - _process_response: Processes the API response and logs it to MongoDB.
+        - _call_with_backoff: Calls the Groq API with a backoff strategy for rate limits.
+        - run_parallel_prompt_tasks: Executes multiple prompt tasks in parallel.
+
+    Instance Variables:
+        - client: Groq client instance.
+        - model_name: Name of the Groq model.
+        - log_file: Path to the log file.
+        - audit_response: Instance for auditing responses.
+        - mongodb_manager: MongoDB connection manager.
     '''
     def __init__(self, model_name: str):
         '''
         Initialize the GroqModels class.
 
-        :param model_name: The name of the model to be used.
+        :param model_name: The name of the Groq model to be used.
+        :type model_name: str
         '''
         super().__init__(provider='groq', model_name=model_name)
         
@@ -65,9 +86,9 @@ class GroqModels(LanguageModel):
     
     def get_log_file(self) -> str:
         '''
-        Get the log file.
+        Get the log file path.
 
-        :return: The log file.
+        :return: The path to the log file.
         :rtype: str
         '''
         return self.log_file
@@ -78,6 +99,9 @@ class GroqModels(LanguageModel):
 
         :param prompt: The prompt to be estimated.
         :type prompt: str
+        
+        :return: The estimated number of tokens.
+        :rtype: int
         '''
         return len(prompt) // 2
     
@@ -87,11 +111,12 @@ class GroqModels(LanguageModel):
                           user_prompt: str,
                           response: ChatCompletion,
                           mongo_db_name: str = None,
-                          mongo_collection_name: str = None) -> None:
+                          mongo_collection_name: str = None,
+                          judge_fn: Callable = None) -> None:
         '''
-        Process API response.
+        Process the API response and log it to MongoDB.
 
-        :param uuid: The uuid of the narrative that has been processed.
+        :param uuid: The UUID of the narrative that has been processed.
         :type uuid: str
 
         :param system_prompt: The system prompt used to generate the response.
@@ -103,12 +128,16 @@ class GroqModels(LanguageModel):
         :param response: The response from the Groq API.
         :type response: ChatCompletion
 
-        :param mongo_db_name: Name of the MongoDB database.
-        :type mongo_db_name: str
+        :param mongo_db_name: Name of the MongoDB database (optional).
+        :type mongo_db_name: str, optional
 
-        :param mongo_collection_name: Name of the MongoDB collection.
-        :type mongo_collection_name: str
+        :param mongo_collection_name: Name of the MongoDB collection (optional).
+        :type mongo_collection_name: str, optional
 
+        :param judge_fn: A function that evaluates the model output (optional).
+        :type judge_fn: Callable, optional
+
+        :raises Exception: If there is an error during processing or logging.
         :return: None
         '''
         # get tokens used
@@ -127,10 +156,16 @@ class GroqModels(LanguageModel):
         # get response
         response_content = response.choices[0].message.content
 
-        # audit response
+        # audit response using Groq moderation content model
         audit_content = self.audit_response.audit_generated_content(
             completion_tokens=completion_tokens_used,
             content=response_content
+        )
+
+        # audit response using LLM as a judge
+        influence_assessment = judge_fn(
+            completion_tokens=completion_tokens_used,
+            llm_generated_text=response_content
         )
 
         # build response content data
@@ -143,10 +178,8 @@ class GroqModels(LanguageModel):
             'prompt_tokens_used': prompt_tokens_used,
             'completion_tokens_used': completion_tokens_used,
             'total_tokens_used': prompt_tokens_used + completion_tokens_used,
-            'audit': {
-                'model': audit_content['model'],
-                'results': audit_content['results'][0]
-            }
+            'audit': audit_content,
+            'influence_operation_assessment': influence_assessment
         }
 
         # get collection
@@ -158,37 +191,43 @@ class GroqModels(LanguageModel):
         # upload response to database
         collection.insert_one(response_content)
     
-    def _call_with_backoff(self, request_id: int,
+    def _call_with_backoff(self,
+                           request_id: int,
                            uuid: str,
                            message: list[dict],
                            mongo_db_name: str = None,
                            mongo_collection_name: str = None,
+                           judge_fn: Callable = None,
                            pbar: tqdm = None,
                            max_retries: int = 5) -> None:
         '''
-        Call the Groq API with a backoff strategy.
+        Call the Groq API with a backoff strategy for handling rate limits.
 
-        :param request_id: The request ID.
+        :param request_id: The request ID for tracking.
         :type request_id: int
 
-        :param uuid: The uuid of the narrative that is being processed.
+        :param uuid: The UUID of the narrative being processed.
         :type uuid: str
 
         :param message: The message prompt to be processed.
         :type message: list[dict]
 
-        :param mongo_db_name: Name of the MongoDB database.
-        :type mongo_db_name: str
+        :param mongo_db_name: Name of the MongoDB database (optional).
+        :type mongo_db_name: str, optional
 
-        :param mongo_collection_name: Name of the MongoDB collection.
-        :type mongo_collection_name: str
+        :param mongo_collection_name: Name of the MongoDB collection (optional).
+        :type mongo_collection_name: str, optional
 
-        :param pbar: The tqdm progress bar.
-        :type pbar: tqdm
+        :param judge_fn: A function that evaluates the model output (optional).
+        :type judge_fn: Callable, optional
 
-        :param max_retries: The maximum number of retries.
-        :type max_retries: int
+        :param pbar: The tqdm progress bar for tracking progress (optional).
+        :type pbar: tqdm, optional
 
+        :param max_retries: The maximum number of retries for the request (default is 5).
+        :type max_retries: int, optional
+
+        :raises Exception: For unexpected errors during the API call.
         :return: None
         '''
         retry_count = 0
@@ -229,11 +268,12 @@ class GroqModels(LanguageModel):
                         user_prompt,
                         response,
                         mongo_db_name,
-                        mongo_collection_name
+                        mongo_collection_name,
+                        judge_fn
                     )
 
                     return
-                        
+
                 except Exception as e:
                     # handle unexpected errors
                     self._update_tqdm_description(
@@ -271,22 +311,27 @@ class GroqModels(LanguageModel):
                                   uuids: list = None,
                                   messages: list = None,
                                   mongo_db_name: str = None,
-                                  mongo_collection_name: str = None) -> None:
+                                  mongo_collection_name: str = None,
+                                  judge_fn: Callable = None) -> None:
         '''
-        Run parallel prompt tasks with thread pooling and rate-limiting.
+        Run multiple prompt tasks in parallel with thread pooling and rate-limiting.
 
-        :param uuids: List of uuids to process.
+        :param uuids: List of UUIDs to process.
         :type uuids: list
 
         :param messages: List of message prompts to process.
         :type messages: list
 
-        :param mongo_db_name: Name of the MongoDB database.
-        :type mongo_db_name: str
+        :param mongo_db_name: Name of the MongoDB database (optional).
+        :type mongo_db_name: str, optional
 
-        :param mongo_collection_name: Name of the MongoDB collection.
-        :type mongo_collection_name: str
+        :param mongo_collection_name: Name of the MongoDB collection (optional).
+        :type mongo_collection_name: str, optional
 
+        :param judge_fn: A function that evaluates the model output (optional).
+        :type judge_fn: Callable, optional
+
+        :raises Exception: If there is an error during execution.
         :return: None
         '''
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -303,6 +348,7 @@ class GroqModels(LanguageModel):
                         message,
                         mongo_db_name,
                         mongo_collection_name,
+                        judge_fn,
                         pbar
                     ): i
                     for i, (uuid, message) in enumerate(zip(uuids, messages))

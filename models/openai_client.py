@@ -9,6 +9,9 @@ import openai
 import tiktoken
 import traceback
 
+# typing
+from typing import Callable
+
 # dotenv for environment variables
 from dotenv import load_dotenv
 
@@ -33,13 +36,33 @@ from databases import MongoDBManager
 # OpenAIGPT class
 class OpenAIGPT(LanguageModel):
     '''
-    OpenAIGPT class
+    OpenAIGPT class for interacting with OpenAI's API.
+
+    This class provides methods to generate responses using the specified OpenAI model,
+    manage token usage, and log responses to a MongoDB database.
+
+    Public Methods:
+        - get_log_file: Returns the path to the log file.
+        - _estimate_tokens: Estimates the number of tokens in a given prompt.
+        - _process_response: Processes the API response and logs it to MongoDB.
+        - _call_with_backoff: Calls the OpenAI API with a backoff strategy for rate limits.
+        - run_parallel_prompt_tasks: Executes multiple prompt tasks in parallel.
+
+    Instance Variables:
+        - client: OpenAI client instance.
+        - model_name: Name of the OpenAI model.
+        - encoding: Token encoding for the model.
+        - log_file: Path to the log file.
+        - audit_response: Instance for auditing responses.
+        - mongodb_manager: MongoDB connection manager.
     '''
     def __init__(self, model_name: str):
         '''
         Initialize the OpenAIGPT class.
 
         :param model_name: The name of the OpenAI model to be used.
+        :type model_name: str
+        :raises KeyError: If the model name is not recognized for token encoding.
         '''
         super().__init__(provider='openai', model_name=model_name)
 
@@ -70,9 +93,9 @@ class OpenAIGPT(LanguageModel):
     
     def get_log_file(self) -> str:
         '''
-        Get the log file.
+        Get the log file path.
 
-        :return: The log file.
+        :return: The path to the log file.
         :rtype: str
         '''
         return self.log_file
@@ -97,11 +120,12 @@ class OpenAIGPT(LanguageModel):
                           response: openai.ChatCompletion,
                           mongo_db_name: str = None,
                           mongo_collection_name: str = None,
-                          task: str = None) -> None:
+                          task: str = None,
+                          judge_fn: Callable = None) -> None:
         '''
-        Process API response.
+        Process the API response and log it to MongoDB.
 
-        :param uuid: The uuid of the narrative that has been processed.
+        :param uuid: The UUID of the narrative that has been processed.
         :type uuid: str
 
         :param system_prompt: The system prompt used to generate the response.
@@ -113,15 +137,19 @@ class OpenAIGPT(LanguageModel):
         :param response: The response from the OpenAI API.
         :type response: openai.ChatCompletion
 
-        :param mongo_db_name: Name of the MongoDB database.
-        :type mongo_db_name: str
+        :param mongo_db_name: Name of the MongoDB database (optional).
+        :type mongo_db_name: str, optional
 
-        :param mongo_collection_name: Name of the MongoDB collection.
-        :type mongo_collection_name: str
+        :param mongo_collection_name: Name of the MongoDB collection (optional).
+        :type mongo_collection_name: str, optional
 
-        :param task: The task to be processed.
-        :type task: str
+        :param task: The task to be processed (optional).
+        :type task: str, optional
 
+        :param judge_fn: A function that evaluates the model output (optional).
+        :type judge_fn: Callable, optional
+
+        :raises Exception: If there is an error during processing or logging.
         :return: None
         '''
         # get tokens used
@@ -154,9 +182,10 @@ class OpenAIGPT(LanguageModel):
             )
 
             # audit response using LLM as a judge
-            '''
-            '''
-
+            influence_assessment = judge_fn(
+                completion_tokens=completion_tokens_used,
+                llm_generated_text=response_content
+            )
 
             # build response content data
             response_content = {
@@ -168,10 +197,8 @@ class OpenAIGPT(LanguageModel):
                 'prompt_tokens_used': prompt_tokens_used,
                 'completion_tokens_used': completion_tokens_used,
                 'total_tokens_used': prompt_tokens_used + completion_tokens_used,
-                'audit': {
-                    'model': audit_content['model'],
-                    'results': audit_content['results'][0]
-                }
+                'audit': audit_content,
+                'influence_operation_assessment': influence_assessment
             }
 
         # get collection
@@ -185,45 +212,52 @@ class OpenAIGPT(LanguageModel):
             response_content
         )
     
-    def _call_with_backoff(self, request_id: int,
+    def _call_with_backoff(self,
+                           request_id: int,
                            uuid: str,
                            message: list[dict],
                            mongo_db_name: str = None,
                            mongo_collection_name: str = None,
-                           pbar: tqdm = None,
                            response_format: dict = None,
                            task: str = None,
+                           judge_fn: Callable = None,
+                           pbar: tqdm = None,
                            max_retries: int = 5) -> None:
         '''
-        Call the OpenAI API with a backoff strategy.
+        Call the OpenAI API with a backoff strategy for handling rate limits.
 
-        :param request_id: The request ID.
+        :param request_id: The request ID for tracking.
         :type request_id: int
 
-        :param uuid: The uuid of the narrative that is being processed.
+        :param uuid: The UUID of the narrative being processed.
         :type uuid: str
 
         :param message: The message prompt to be processed.
         :type message: list[dict]
 
-        :param mongo_db_name: Name of the MongoDB database.
-        :type mongo_db_name: str
+        :param mongo_db_name: Name of the MongoDB database (optional).
+        :type mongo_db_name: str, optional
 
-        :param mongo_collection_name: Name of the MongoDB collection.
-        :type mongo_collection_name: str
+        :param mongo_collection_name: Name of the MongoDB collection (optional).
+        :type mongo_collection_name: str, optional
 
-        :param pbar: The tqdm progress bar.
-        :type pbar: tqdm
+        :param response_format: The expected response format (optional).
+        :type response_format: dict, optional
 
-        :param response_format: The response format.
-        :type response_format: dict
+        :param task: The task to be processed (optional).
+        :type task: str, optional
 
-        :param task: The task to be processed.
-        :type task: str
+        :param judge_fn: A function that evaluates the model output (optional).
+        :type judge_fn: Callable, optional
 
-        :param max_retries: The maximum number of retries.
-        :type max_retries: int
+        :param pbar: The tqdm progress bar for tracking progress (optional).
+        :type pbar: tqdm, optional
 
+        :param max_retries: The maximum number of retries for the request (default is 5).
+        :type max_retries: int, optional
+
+        :raises RateLimitError: If the request exceeds the rate limit.
+        :raises Exception: For other unexpected errors.
         :return: None
         '''
         retry_count = 0
@@ -265,7 +299,8 @@ class OpenAIGPT(LanguageModel):
                         response,
                         mongo_db_name,
                         mongo_collection_name,
-                        task
+                        task,
+                        judge_fn
                     )
 
                     return
@@ -318,28 +353,33 @@ class OpenAIGPT(LanguageModel):
                                   mongo_db_name: str = None,
                                   mongo_collection_name: str = None,
                                   response_format: dict = None,
-                                  task: str = None) -> None:
+                                  task: str = None,
+                                  judge_fn: Callable = None) -> None:
         '''
-        Run parallel prompt tasks with thread pooling and rate-limiting.
+        Run multiple prompt tasks in parallel with thread pooling and rate-limiting.
 
-        :param uuids: List of uuids to process.
+        :param uuids: List of UUIDs to process.
         :type uuids: list
 
         :param messages: List of message prompts to process.
         :type messages: list
 
-        :param mongo_db_name: Name of the MongoDB database.
-        :type mongo_db_name: str
+        :param mongo_db_name: Name of the MongoDB database (optional).
+        :type mongo_db_name: str, optional
 
-        :param mongo_collection_name: Name of the MongoDB collection.
-        :type mongo_collection_name: str
+        :param mongo_collection_name: Name of the MongoDB collection (optional).
+        :type mongo_collection_name: str, optional
 
-        :param response_format: The response format.
-        :type response_format: dict
+        :param response_format: The expected response format (optional).
+        :type response_format: dict, optional
 
-        :param task: The task to be processed.
-        :type task: str
+        :param task: The task to be processed (optional).
+        :type task: str, optional
 
+        :param judge_fn: A function that evaluates the model output (optional).
+        :type judge_fn: Callable, optional
+
+        :raises Exception: If there is an error during execution.
         :return: None
         '''
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -356,9 +396,10 @@ class OpenAIGPT(LanguageModel):
                         message,
                         mongo_db_name,
                         mongo_collection_name,
-                        pbar,
                         response_format,
-                        task
+                        task,
+                        judge_fn,
+                        pbar
                     ): i
                     for i, (uuid, message) in enumerate(zip(uuids, messages))
                 }
@@ -371,20 +412,3 @@ class OpenAIGPT(LanguageModel):
                         except Exception as e:
                             pass
                         pbar.update(1)
-    
-    def test_prompts(self, message: list) -> str:
-        '''
-        Test the prompts.
-
-        :param message: The message prompt to be processed.
-        :type message: list
-
-        :return: The response from the OpenAI API.
-        :rtype: openai.ChatCompletion
-        '''
-        response = self.client.chat.completions.create(
-            model=self.model_name,
-            messages=message
-        )
-
-        return response
