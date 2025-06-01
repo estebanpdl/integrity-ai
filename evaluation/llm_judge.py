@@ -50,18 +50,18 @@ class LLMJudge:
 
         # get model limits
         self.model_limits = self.get_model_limits()
-        self.max_requests_per_min = self.model_limits['rpm']
-        self.max_tokens_per_min = self.model_limits['tpm']
-        self.max_requests_per_day = self.model_limits['rpd']
+        self.judge_max_requests_per_min = self.model_limits['rpm']
+        self.judge_max_tokens_per_min = self.model_limits['tpm']
+        self.judge_max_requests_per_day = self.model_limits['rpd']
 
         # shared threading locks
-        self.rate_limit_lock = threading.Lock()
-        self.token_lock = threading.Lock()
+        self.judge_rate_limit_lock = threading.Lock()
+        self.judge_token_lock = threading.Lock()
 
         # shared controls for rate limiting
-        self.request_timestamps = []
-        self.token_usage_log = []
-        self.daily_requests = 0
+        self.judge_request_timestamps = []
+        self.judge_token_usage_log = []
+        self.judge_daily_requests = 0
 
         # shared threading event
         self.stop_flag = threading.Event()
@@ -134,7 +134,7 @@ class LLMJudge:
             llm_generated_text=llm_generated_text
         )
     
-    def _enforce_rate_limits(self, completion_tokens: int) -> None:
+    def _judge_enforce_rate_limits(self, completion_tokens: int) -> None:
         '''
         Enforce rate limits for the OpenAI API.
         This method ensures that the number of requests and tokens used
@@ -148,32 +148,32 @@ class LLMJudge:
         '''
         while True:
             wait_time = 0
-            with self.rate_limit_lock, self.token_lock:
+            with self.judge_rate_limit_lock, self.judge_token_lock:
                 now = time.time()
 
                 # timestamps and tokens used
-                self.request_timestamps[:] = [
-                    t for t in self.request_timestamps if now - t < 60.0
+                self.judge_request_timestamps[:] = [
+                    t for t in self.judge_request_timestamps if now - t < 60.0
                 ]
-                self.token_usage_log[:] = [
-                    (t, tokens) for t, tokens in self.token_usage_log if now - t < 60.0
+                self.judge_token_usage_log[:] = [
+                    (t, tokens) for t, tokens in self.judge_token_usage_log if now - t < 60.0
                 ]
 
-                if len(self.request_timestamps) >= self.max_requests_per_min:
-                    if self.request_timestamps:
-                        oldest_request_time = self.request_timestamps[0]
+                if len(self.judge_request_timestamps) >= self.judge_max_requests_per_min:
+                    if self.judge_request_timestamps:
+                        oldest_request_time = self.judge_request_timestamps[0]
                         request_wait = 60.0 - (now - oldest_request_time)
                     else:
                         request_wait = 1.0
                     wait_time = max(wait_time, request_wait)
                 
-                tokens_used = sum(tokens for _, tokens in self.token_usage_log)
+                tokens_used = sum(tokens for _, tokens in self.judge_token_usage_log)
                 
                 # aggregated tokens
                 agg_tokens = tokens_used + completion_tokens
-                if agg_tokens > self.max_tokens_per_min:
-                    if self.token_usage_log:
-                        oldest_token_time = self.token_usage_log[0][0]
+                if agg_tokens > self.judge_max_tokens_per_min:
+                    if self.judge_token_usage_log:
+                        oldest_token_time = self.judge_token_usage_log[0][0]
                         token_wait = 60.0 - (now - oldest_token_time)
                     else:
                         token_wait = 1.0
@@ -182,10 +182,10 @@ class LLMJudge:
                 if wait_time == 0:
                     # no enforced wait time
                     now = time.time()
-                    self.request_timestamps.append(now)
+                    self.judge_request_timestamps.append(now)
 
                     # increment daily requests
-                    self.daily_requests += 1
+                    self.judge_daily_requests += 1
 
                     # add jitter to avoid thread pileup
                     jitter = self.DEFAULT_JITTER + random.uniform(0, 0.05)
@@ -196,26 +196,28 @@ class LLMJudge:
             jittered_wait = wait_time + random.uniform(0.05, 0.25)
             self.stop_flag.wait(jittered_wait)
             
-    def evaluate_with_openai(self, llm_generated_text: str,
-                             completion_tokens: int) -> dict:
+    def evaluate_with_openai(self, completion_tokens: int,
+                             llm_generated_text: str) -> dict:
         '''
         Evaluate the LLM generated text with OpenAI models.
 
-        :param llm_generated_text: The LLM generated text to be evaluated.
-        :type llm_generated_text: str
-
         :param completion_tokens: The number of completion tokens used.
         :type completion_tokens: int
+
+        :param llm_generated_text: The LLM generated text to be evaluated.
+        :type llm_generated_text: str
 
         :return: The evaluation response from OpenAI.
         :rtype: dict
         '''
         # enforce rate limits
-        self._enforce_rate_limits(completion_tokens)
+        self._judge_enforce_rate_limits(completion_tokens)
 
         # make request
-        while True:
-            if self.daily_requests - 1 < self.max_requests_per_day:
+        max_retries = 3
+        retry_count = 0
+        while retry_count <= max_retries:
+            if self.judge_daily_requests - 1 < self.judge_max_requests_per_day:
                 response = self.openai_client.chat.completions.with_raw_response.create(
                     model=self.model_name,
                     messages=[
@@ -230,24 +232,34 @@ class LLMJudge:
                             )
                         }
                     ],
-                    temperature=1.0,
+                    temperature=0.5,
                     response_format={'type': 'json_object'}
                 )
 
                 # update token usage log
-                self.token_usage_log.append(
+                self.judge_token_usage_log.append(
                     (time.time(), completion_tokens)
                 )
 
+                # parse response
+                response_content = json.loads(
+                    response.parse().choices[0].message.content
+                )
+
                 # return response
-                return response.parse().choices[0].message.content
+                return {
+                    'model': self.model_name,
+                    'results': response_content
+                }
             else:
+                response = None
                 remaining_requests = response.headers.get('x-ratelimit-remaining-requests')
-                if remaining_requests > (self.max_requests_per_day - self.daily_requests):
-                    with self.rate_limit_lock:
-                        self.daily_requests = remaining_requests
+                if remaining_requests > (self.judge_max_requests_per_day - self.judge_daily_requests):
+                    with self.judge_rate_limit_lock:
+                        self.judge_daily_requests = remaining_requests
                         continue
                 else:
+                    retry_count += 1
                     sleep_time = 60.0
                     self.stop_flag.wait(sleep_time)
                     continue
@@ -273,6 +285,17 @@ class LLMJudge:
             'gpt-4.1-mini',
             'gpt-4.1-nano',
             'o4-mini'
+        ]
+
+        anthropic_models = [
+            'claude-3-haiku-20240307',
+            'claude-3-5-haiku-latest',
+            'claude-3-sonnet-20240229',
+            'claude-3-5-sonnet-latest',
+            'claude-3-7-sonnet-latest',
+            'claude-sonnet-4-20250514',
+            'claude-3-opus-latest',
+            'claude-opus-4-20250514'
         ]
         
         return {
