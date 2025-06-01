@@ -1,8 +1,5 @@
 # -*- coding: utf-8 -*-
 
-# import modules
-import os
-
 # import base class
 from .database import Database
 
