@@ -19,6 +19,7 @@ def handle_claim_analysis(args: dict) -> None:
     '''
     embedding_model_map = {
         'text-embedding-004': 'Gemini',
+        'gemini-embedding-exp-03-07': 'Gemini',
         'text-embedding-ada-002': 'OpenAI',
         'text-embedding-3-small': 'OpenAI',
         'text-embedding-3-large': 'OpenAI'
