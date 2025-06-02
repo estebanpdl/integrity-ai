@@ -29,6 +29,24 @@
             "tpm": 20000
         }
     },
+    "google": {
+        "gemini-2.0-flash-lite": {
+            "rpm": 4000,
+            "tpm": 4000000
+        },
+        "gemini-2.0-flash": {
+            "rpm": 2000,
+            "tpm": 4000000
+        },
+        "gemini-2.5-flash-preview-05-20": {
+            "rpm": 1000,
+            "tpm": 1000000
+        },
+        "gemini-2.5-pro-preview-05-06": {
+            "rpm": 150,
+            "tpm": 2000000
+        }
+    },
     "openai": {
         "gpt-3.5-turbo": {
             "rpm": 500,
@@ -89,6 +107,28 @@
             "tpm": 6000
         }
     },
+    "xai": {
+        "grok-3-latest": {
+            "rpm": 500,
+            "tpm": 10000
+        },
+        "grok-3-mini": {
+            "rpm": 150,
+            "tpm": 10000
+        },
+        "grok-3-fast": {
+            "rpm": 500,
+            "tpm": 10000
+        },
+        "grok-3-mini-fast": {
+            "rpm": 150,
+            "tpm": 10000
+        },
+        "grok-2-latest": {
+            "rpm": 700,
+            "tpm": 10000
+        }
+    },
     "openai_moderation": {
         "omni-moderation-latest": {
             "rpm": 500,
@@ -111,11 +151,6 @@
             "rpm": 500,
             "tpm": 200000,
             "rpd": 10000
-        },
-        "meta-llama/llama-4-maverick-17b-128e-instruct": {
-            "rpm": 30,
-            "tpm": 6000,
-            "rpd": 1000
         }
     }
 }
