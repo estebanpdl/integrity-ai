@@ -30,6 +30,10 @@ class GeminiEmbeddingModel(VectorModel):
         'text-embedding-004': {
             'rpm': 1500,
             'tpm': 1000000
+        },
+        'gemini-embedding-exp-03-07': {
+            'rpm': 1500,
+            'tpm': 1000000
         }
     }
 
