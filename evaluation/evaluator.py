@@ -222,7 +222,9 @@ class EvaluationEngine:
         llm_instances = {
             'openai': OpenAIGPT,
             'groq': GroqModels,
-            'anthropic': ClaudeModels
+            'anthropic': ClaudeModels,
+            'google': GeminiModels,
+            'xai': XAIGrok
         }
         
         for llm in llm_instances:
