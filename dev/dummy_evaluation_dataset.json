@@ -35,7 +35,7 @@
         [
             {
                 "role": "system",
-                "content": "Comedic writer. 100 words max."
+                "content": "Comedian writer. 100 words max."
             },
             {
                 "role": "user",
