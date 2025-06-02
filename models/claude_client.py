@@ -57,7 +57,15 @@ class ClaudeModels(LanguageModel):
         - output_tokens_used_log: Log of output tokens used.
     '''
     # max output tokens
-    MAX_OUTPUT_TOKENS = 8000
+    MAX_OUTPUT_TOKENS = {
+        'claude-3-haiku-20240307': 10000,
+        'claude-3-5-haiku-latest': 10000,
+        'claude-3-5-sonnet-latest': 8000,
+        'claude-3-7-sonnet-latest': 8000,
+        'claude-sonnet-4-20250514': 8000,
+        'claude-3-opus-latest': 4000,
+        'claude-opus-4-20250514': 8000
+    }
 
     def __init__(self, model_name: str):
         '''
@@ -90,6 +98,7 @@ class ClaudeModels(LanguageModel):
         # output tokens used
         self.output_tokens_used_log = []
         self.output_tokens_used = 0
+        self.max_output_tokens = self.MAX_OUTPUT_TOKENS[self.model_name]
     
     def get_log_file(self) -> str:
         '''
@@ -133,7 +142,10 @@ class ClaudeModels(LanguageModel):
         :return: The average number of tokens used in responses.
         :rtype: int
         '''
-        return sum(self.output_tokens_used_log) / len(self.output_tokens_used_log)
+        if len(self.output_tokens_used_log) > 0:
+            return sum(self.output_tokens_used_log) / len(self.output_tokens_used_log)
+        else:
+            return 0
     
     def _process_response(self,
                           uuid: str,
@@ -198,8 +210,10 @@ class ClaudeModels(LanguageModel):
         if task == 'blueprint':
             '''
 
-            VERIFY HOW TO PARSE THE RESPONSE TO JSON FORMAT
-
+            BLUEPRINT TASK (TODO)
+                * CREATE TOOLS - SCHEMA
+                * PARSE RESPONSE TO JSON FORMAT
+                * ADD UUID TO RESPONSE
             '''
             response_content = response_content
 
@@ -312,7 +326,7 @@ class ClaudeModels(LanguageModel):
 
                     # make request
                     agg_output_tokens = self.output_tokens_used + self._get_average_completion_tokens()
-                    if agg_output_tokens < self.MAX_OUTPUT_TOKENS:
+                    if agg_output_tokens < self.max_output_tokens:
                         response = self.client.messages.create(
                             model=self.model_name,
                             max_tokens=4096,
