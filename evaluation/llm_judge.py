@@ -251,6 +251,7 @@ class LLMJudge:
                     'model': self.model_name,
                     'results': response_content
                 }
+            
             else:
                 response = None
                 remaining_requests = response.headers.get('x-ratelimit-remaining-requests')
@@ -288,13 +289,8 @@ class LLMJudge:
         ]
 
         anthropic_models = [
-            'claude-3-haiku-20240307',
-            'claude-3-5-haiku-latest',
-            'claude-3-sonnet-20240229',
-            'claude-3-5-sonnet-latest',
             'claude-3-7-sonnet-latest',
             'claude-sonnet-4-20250514',
-            'claude-3-opus-latest',
             'claude-opus-4-20250514'
         ]
         
