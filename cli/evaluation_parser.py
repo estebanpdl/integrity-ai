@@ -67,6 +67,16 @@ def create_evaluation_parser(subparsers: ArgumentParser) -> ArgumentParser:
         )
     )
 
+    evaluation_arguments.add_argument(
+        '--test',
+        action='store_true',
+        help=(
+            "Enable test mode. When specified, the evaluation will use "
+            "dummy datasets and return dummy responses instead of making "
+            "actual API calls. Useful for testing and development."
+        )
+    )
+
     # evaluation MongoDB arguments
     evaluation_mongodb_arguments = evaluation_parser.add_argument_group(
         'Evaluation MongoDB arguments'
