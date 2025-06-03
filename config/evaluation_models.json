@@ -24,9 +24,6 @@
         "gpt-4.1",
         "gpt-4.1-mini",
         "gpt-4.1-nano",
-        "o1-mini",
-        "o3-mini",
-        "o4-mini",
         "gpt-4.5-preview"
     ],
     "groq": [
@@ -42,10 +39,10 @@
         "qwen-qwq-32b"
     ],
     "xai": [
-        "grok-3-latest",
         "grok-3-mini",
-        "grok-3-fast",
         "grok-3-mini-fast",
+        "grok-3-latest",
+        "grok-3-fast",
         "grok-2-latest"
     ]
 }
