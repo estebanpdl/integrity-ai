@@ -49,13 +49,16 @@ class EvaluationEngine:
         self.claims_dataset = self._load_claims_dataset(claims_path)
 
         # check required column in claims dataset
-        required_columns = ['claim', 'uuid']
+        required_columns = ['claim', 'uuid', 'audience']
         missing_columns = [
             col for col in required_columns
             if col not in self.claims_dataset.columns
         ]
         if missing_columns:
             raise ValueError(f'Claims dataset missing required column: {missing_columns}')
+        
+        # check sample size
+        self.sample_size = self.args.get('sample_size', 100)
         
         # LLM Judge
         self.llm_judge = LLMJudge(args=self.args)
@@ -100,6 +103,15 @@ class EvaluationEngine:
         
         return prompts
     
+    def _load_uuids_from_collection(self) -> list:
+        '''
+        Load the uuids from a MongoDB collection.
+        '''
+        return self.mongodb_manager.get_collected_uuids(
+            self.mongo_db_name,
+            self.mongo_collection_name
+        )
+    
     def _build_evaluation_dataset(self) -> tuple:
         '''
         Build the evaluation dataset
@@ -118,99 +130,110 @@ class EvaluationEngine:
                 dummy_evaluation_dataset = json.load(file)
 
             # return related uuids and evaluation dataset from dummy dataset
-            related_uuids = dummy_evaluation_dataset['uuids']
+            evaluation_uuids = dummy_evaluation_dataset['uuids']
             evaluation_dataset = dummy_evaluation_dataset['evaluation_dataset']
 
-            return related_uuids[:5], evaluation_dataset[:5]
+            return evaluation_uuids[:self.sample_size], evaluation_dataset[:self.sample_size]
 
         # build actual evaluation dataset
-        related_uuids = []
+        processed_count = 0
+        collected_uuids = self._load_uuids_from_collection()
+        evaluation_uuids = []
         evaluation_dataset = []
+        
         for idx, row in self.claims_dataset.iterrows():
+            # stop processing when we reach the sample size
+            if processed_count >= self.sample_size:
+                break
+                
             uuid = row['uuid']
-            claim = row['claim']
-            audience = row['audience']
+            if uuid not in collected_uuids:
+                claim = row['claim']
+                audience = row['audience']
 
-            # build test cases
-            test_case = {
-                'uuid': uuid,
-                'claim': claim,
-                'audience': audience,
-                'control_prompt': {
-                    'system': prompts.get(
-                        'control_prompt_system', {}
-                    ).get('prompt', ''),
-                    'message': prompts.get(
-                        'control_prompt_message', {}
-                    ).get('prompt', '')
-                },
-                'personas': {}
-            }
-
-            # assign the claim to the control prompt message
-            test_case['control_prompt']['message'] = string.Template(
-                test_case['control_prompt']['message']
-            ).substitute(
-                viewpoint=claim,
-                audience=audience
-            )
-
-            # append control prompt to the evaluation dataset
-            evaluation_dataset.append(
-                [
-                    {
-                        'role': 'system',
-                        'content': test_case['control_prompt']['system']
+                # build test cases
+                test_case = {
+                    'uuid': uuid,
+                    'claim': claim,
+                    'audience': audience,
+                    'control_prompt': {
+                        'system': prompts.get(
+                            'control_prompt_system', {}
+                        ).get('prompt', ''),
+                        'message': prompts.get(
+                            'control_prompt_message', {}
+                        ).get('prompt', '')
                     },
-                    {
-                        'role': 'user',
-                        'content': test_case['control_prompt']['message']
-                    }
-                ]
-            )
-
-            # add uuid
-            related_uuids.append(uuid)
-
-            for persona, content in prompts.get('personas', {}).items():
-                test_case['personas'][persona] = {
-                    'system': content.get('system', {}).get('prompt', ''),
-                    'message': content.get('message', {}).get('prompt', '')
+                    'personas': {}
                 }
 
-                # assign the claim to the persona prompt message
-                test_case['personas'][persona]['message'] = string.Template(
-                    test_case['personas'][persona]['message']
+                # assign the claim to the control prompt message
+                test_case['control_prompt']['message'] = string.Template(
+                    test_case['control_prompt']['message']
                 ).substitute(
                     viewpoint=claim,
                     audience=audience
                 )
 
-                # append the persona prompt to the evaluation dataset
+                # append control prompt to the evaluation dataset
                 evaluation_dataset.append(
                     [
                         {
                             'role': 'system',
-                            'content': test_case['personas'][persona]['system']
+                            'content': test_case['control_prompt']['system']
                         },
                         {
                             'role': 'user',
-                            'content': test_case['personas'][persona]['message']
+                            'content': test_case['control_prompt']['message']
                         }
                     ]
                 )
 
                 # add uuid
-                related_uuids.append(uuid)
-            
-            # upload test case to MongoDB
-            self.mongodb_manager.upload_test_case(
-                test_case=test_case,
-                db_name=self.mongo_db_name,
-                collection_name=f'{self.mongo_collection_name}_test_cases_{lang}'
-            )
+                evaluation_uuids.append(uuid)
+
+                for persona, content in prompts.get('personas', {}).items():
+                    test_case['personas'][persona] = {
+                        'system': content.get('system', {}).get('prompt', ''),
+                        'message': content.get('message', {}).get('prompt', '')
+                    }
+
+                    # assign the claim to the persona prompt message
+                    test_case['personas'][persona]['message'] = string.Template(
+                        test_case['personas'][persona]['message']
+                    ).substitute(
+                        viewpoint=claim,
+                        audience=audience
+                    )
+
+                    # append the persona prompt to the evaluation dataset
+                    evaluation_dataset.append(
+                        [
+                            {
+                                'role': 'system',
+                                'content': test_case['personas'][persona]['system']
+                            },
+                            {
+                                'role': 'user',
+                                'content': test_case['personas'][persona]['message']
+                            }
+                        ]
+                    )
+
+                    # add uuid
+                    evaluation_uuids.append(uuid)
+                
+                # upload test case to MongoDB
+                self.mongodb_manager.upload_test_case(
+                    test_case=test_case,
+                    db_name=self.mongo_db_name,
+                    collection_name=f'{self.mongo_collection_name}_test_cases_{lang}'
+                )
+                
+                # increment processed count
+                processed_count += 1
         
-        return related_uuids, evaluation_dataset
+        return evaluation_uuids, evaluation_dataset
     
     def _load_evaluation_models(self) -> dict:
         '''
