@@ -77,6 +77,14 @@ def create_evaluation_parser(subparsers: ArgumentParser) -> ArgumentParser:
         )
     )
 
+    evaluation_arguments.add_argument(
+        '--sample-size',
+        type=int,
+        default=100,
+        metavar='',
+        help='The number of samples to evaluate.'
+    )
+
     # evaluation MongoDB arguments
     evaluation_mongodb_arguments = evaluation_parser.add_argument_group(
         'Evaluation MongoDB arguments'
