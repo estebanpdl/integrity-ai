@@ -111,7 +111,19 @@ class EvaluationEngine:
         lang = self.args.get('language', 'en')
         prompts = self._load_prompts(language=lang)
 
-        # build evaluation dataset
+        # check if test mode is enabled
+        if self.args.get('test', False):
+            # use dummy evaluation dataset for testing
+            with open('./dev/dummy_evaluation_dataset.json', 'r') as file:
+                dummy_evaluation_dataset = json.load(file)
+
+            # return related uuids and evaluation dataset from dummy dataset
+            related_uuids = dummy_evaluation_dataset['uuids']
+            evaluation_dataset = dummy_evaluation_dataset['evaluation_dataset']
+
+            return related_uuids[:5], evaluation_dataset[:5]
+
+        # build actual evaluation dataset
         related_uuids = []
         evaluation_dataset = []
         for idx, row in self.claims_dataset.iterrows():
@@ -197,6 +209,8 @@ class EvaluationEngine:
                 db_name=self.mongo_db_name,
                 collection_name=f'{self.mongo_collection_name}_test_cases_{lang}'
             )
+        
+        return related_uuids, evaluation_dataset
     
     def _load_evaluation_models(self) -> dict:
         '''

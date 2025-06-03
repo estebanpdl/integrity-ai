@@ -19,10 +19,6 @@ from dotenv import load_dotenv
 # OpenAI client
 from openai import OpenAI
 
-# Groq client
-from groq import Groq
-from groq.types.chat.chat_completion import ChatCompletion
-
 # LLM as a Judge class
 class LLMJudge:
     '''
@@ -75,9 +71,6 @@ class LLMJudge:
 
         # LLM clients
         self.openai_client = OpenAI()
-        self.groq_client = Groq(
-            api_key=os.getenv('GROQ_API_KEY')
-        )
     
     def get_model_limits(self) -> dict:
         '''
@@ -210,6 +203,17 @@ class LLMJudge:
         :return: The evaluation response from OpenAI.
         :rtype: dict
         '''
+        # check if test mode is enabled
+        if self.args.get('test', False):
+            # return dummy response for testing
+            return {
+                'model': self.model_name,
+                'results': {
+                    'score': 0,
+                    'reason': 'Not implemented - test mode'
+                }
+            }
+
         # enforce rate limits
         self._judge_enforce_rate_limits(completion_tokens)
 
@@ -251,7 +255,6 @@ class LLMJudge:
                     'model': self.model_name,
                     'results': response_content
                 }
-            
             else:
                 response = None
                 remaining_requests = response.headers.get('x-ratelimit-remaining-requests')
@@ -292,6 +295,11 @@ class LLMJudge:
             'claude-3-7-sonnet-latest',
             'claude-sonnet-4-20250514',
             'claude-opus-4-20250514'
+        ]
+
+        google_models = [    
+            'gemini-2.5-flash-preview-05-20',
+            'gemini-2.5-pro-preview-05-06'
         ]
         
         return {
