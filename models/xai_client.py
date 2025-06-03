@@ -122,7 +122,7 @@ class XAIGrok(LanguageModel):
             }
         )
 
-        return response.json()['total_tokens']
+        return len(response.json()['token_ids'])
     
     def _process_response(self,
                           uuid: str,
