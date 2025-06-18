@@ -227,6 +227,7 @@ class GeminiEmbeddingModel(VectorModel):
         :rtype: tuple[float, float, int, int, int]
         '''
         current_batch = []
+        current_uuids = []
 
         # token count
         token_count = 0
@@ -235,7 +236,7 @@ class GeminiEmbeddingModel(VectorModel):
         request_id = start_request_id
 
         # process batch data
-        for text in batch_data:
+        for idx, text in enumerate(batch_data):
             text_tokens = self.estimate_tokens(text)
 
             # check token count
@@ -245,7 +246,7 @@ class GeminiEmbeddingModel(VectorModel):
             ):
                 # compute embeddings
                 self._safe_embed_request(
-                    uuids=uuids,
+                    uuids=current_uuids,
                     batch_data=current_batch,
                     mongo_db_name=mongo_db_name,
                     mongo_collection_name=mongo_collection_name,
@@ -259,6 +260,8 @@ class GeminiEmbeddingModel(VectorModel):
                 request_count += 1
                 request_id += 1
                 current_batch = []
+                current_uuids = []
+                token_count = 0
                 
                 # check RPM limits
                 elapsed_rpm = time.time() - rpm_start_time
@@ -277,8 +280,9 @@ class GeminiEmbeddingModel(VectorModel):
                     tpm_start_time = time.time()
                     pbar.set_description('Computing embeddings')
                 
-            # add text to batch
+            # add text and uuid to batch
             current_batch.append(text)
+            current_uuids.append(uuids[idx])
             token_count += text_tokens
             global_token_count += text_tokens
 
@@ -295,7 +299,7 @@ class GeminiEmbeddingModel(VectorModel):
         if current_batch:
             # compute embeddings
             self._safe_embed_request(
-                uuids=uuids,
+                uuids=current_uuids,
                 batch_data=current_batch,
                 mongo_db_name=mongo_db_name,
                 mongo_collection_name=mongo_collection_name,

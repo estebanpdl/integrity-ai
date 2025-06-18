@@ -27,15 +27,15 @@ class OpenAIEmbeddingModel(VectorModel):
     # OpenAI model limits
     MODEL_LIMITS = {
         'text-embedding-ada-002': {
-            'rpm': 3000,
+            'rpm': 5000,
             'tpm': 1000000
         },
         'text-embedding-3-small': {
-            'rpm': 3000,
+            'rpm': 5000,
             'tpm': 1000000
         },
         'text-embedding-3-large': {
-            'rpm': 3000,
+            'rpm': 5000,
             'tpm': 1000000
         }
     }
@@ -44,7 +44,7 @@ class OpenAIEmbeddingModel(VectorModel):
     ENCODING = 'cl100k_base'
 
     # max tokens per request
-    MAX_TOKENS_PER_REQUEST = 600000
+    MAX_TOKENS_PER_REQUEST = 250000
 
     # max number of documents to process in one batch
     DOCS_PER_BATCH = 2000
@@ -223,6 +223,7 @@ class OpenAIEmbeddingModel(VectorModel):
         :rtype: tuple[float, float, int, int, int]
         '''
         current_batch = []
+        current_uuids = []
 
         # token count
         token_count = 0
@@ -231,7 +232,7 @@ class OpenAIEmbeddingModel(VectorModel):
         request_id = start_request_id
         
         # process batch data
-        for text in batch_data:
+        for idx, text in enumerate(batch_data):
             text_tokens = self.estimate_tokens(text)
 
             # check token count
@@ -241,7 +242,7 @@ class OpenAIEmbeddingModel(VectorModel):
             ):
                 # compute embeddings
                 self._safe_embed_request(
-                    uuids=uuids,
+                    uuids=current_uuids,
                     batch_data=current_batch,
                     mongo_db_name=mongo_db_name,
                     mongo_collection_name=mongo_collection_name,
@@ -255,6 +256,8 @@ class OpenAIEmbeddingModel(VectorModel):
                 request_count += 1
                 request_id += 1
                 current_batch = []
+                current_uuids = []
+                token_count = 0
 
                 # check RPM limits
                 elapsed_rpm = time.time() - rpm_start_time
@@ -273,8 +276,9 @@ class OpenAIEmbeddingModel(VectorModel):
                     tpm_start_time = time.time()
                     pbar.set_description('Computing embeddings')
 
-            # add text to batch
+            # add text and uuid to batch
             current_batch.append(text)
+            current_uuids.append(uuids[idx])
             token_count += text_tokens
             global_token_count += text_tokens
 
@@ -291,7 +295,7 @@ class OpenAIEmbeddingModel(VectorModel):
         if current_batch:
             # compute embeddings
             self._safe_embed_request(
-                uuids=uuids,
+                uuids=current_uuids,
                 batch_data=current_batch,
                 mongo_db_name=mongo_db_name,
                 mongo_collection_name=mongo_collection_name,
